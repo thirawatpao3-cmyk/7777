@@ -1,0 +1,184 @@
+-- สร้าง UI หน้าต่างเปลี่ยนเพลง Tool (ปุ่มเปิด/หยุดสลับกัน + แสดงชื่อเพลง + ช่องใส่เพลงอัจฉริยะ)
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("ToolMusicUI_PlayStop") then
+    playerGui.ToolMusicUI_PlayStop:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ToolMusicUI_PlayStop"
+screenGui.Parent = playerGui
+
+-- กรอบหลัก
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 260, 0, 180)
+frame.Position = UDim2.new(0.5, -130, 0.4, -90)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
+
+-- ขอบเรืองแสงวิบวับ ขาว-ดำ
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 3
+stroke.Parent = frame
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundTransparency = 1
+title.Text = "🎵 กันเจาะเปาสุดหล่อ"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.Parent = frame
+
+-- ช่องใส่ ID เพลง
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(0, 220, 0, 35)
+textBox.Position = UDim2.new(0.5, -110, 0, 45)
+textBox.Text = "ช่องใส่เพลง"
+textBox.TextColor3 = Color3.fromRGB(150, 150, 150)
+textBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+textBox.TextSize = 14
+textBox.Font = Enum.Font.Gotham
+textBox.Parent = frame
+
+local boxCorner = Instance.new("UICorner")
+boxCorner.CornerRadius = UDim.new(0, 6)
+boxCorner.Parent = textBox
+
+-- จัดการข้อความอัจฉริยะ
+textBox.Focused:Connect(function()
+    if textBox.Text == "ช่องใส่เพลง" then
+        textBox.Text = ""
+        textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end)
+
+textBox.FocusLost:Connect(function()
+    if textBox.Text == "" then
+        textBox.Text = "ช่องใส่เพลง"
+        textBox.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end)
+
+-- ป้ายข้อความแสดงชื่อเพลง
+local songNameLabel = Instance.new("TextLabel")
+songNameLabel.Size = UDim2.new(0, 220, 0, 25)
+songNameLabel.Position = UDim2.new(0.5, -110, 0, 85)
+songNameLabel.BackgroundTransparency = 1
+songNameLabel.Text = "🎶 กำลังเล่น: -"
+songNameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+songNameLabel.TextSize = 12
+songNameLabel.Font = Enum.Font.Gotham
+songNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+songNameLabel.Parent = frame
+
+-- ปุ่มสลับ เปิด / หยุด
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 220, 0, 35)
+button.Position = UDim2.new(0.5, -110, 0, 118)
+button.Text = "เปิด"
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+button.TextSize = 14
+button.Font = Enum.Font.GothamBold
+button.Parent = frame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = button
+
+-- ปุ่ม Toggle เปิด-ปิดหน้าต่าง
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 45, 0, 45)
+toggleBtn.Position = UDim2.new(0, 50, 0, 50)
+toggleBtn.Text = ""
+toggleBtn.Active = true
+toggleBtn.Draggable = true
+toggleBtn.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
+
+-- ระบบขอบวิบวับ ขาว-ดำ แบบช้าๆ
+task.spawn(function()
+    while screenGui and screenGui.Parent do
+        for i = 0, 1, 0.05 do
+            if not screenGui or not screenGui.Parent then break end
+            stroke.Color = Color3.fromRGB(255, 255, 255):Lerp(Color3.fromRGB(0, 0, 0), i)
+            toggleBtn.BackgroundColor3 = stroke.Color
+            task.wait(0.05)
+        end
+        for i = 0, 1, 0.05 do
+            if not screenGui or not screenGui.Parent then break end
+            stroke.Color = Color3.fromRGB(0, 0, 0):Lerp(Color3.fromRGB(255, 255, 255), i)
+            toggleBtn.BackgroundColor3 = stroke.Color
+            task.wait(0.05)
+        end
+    end
+end)
+
+local isOpen = true
+toggleBtn.MouseButton1Click:Connect(function()
+    isOpen = not isOpen
+    frame.Visible = isOpen
+end)
+
+toggleBtn.MouseButton2Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- ระบบกด เปิด / หยุด เพลงสลับกัน
+local MarketplaceService = game:GetService("MarketplaceService")
+local isPlaying = false
+
+button.MouseButton1Click:Connect(function()
+    local songId = textBox.Text
+    if songId ~= "" and songId ~= "ช่องใส่เพลง" then
+        if not isPlaying then
+            -- สถานะ: กดเปิด
+            isPlaying = true
+            button.Text = "หยุด"
+            
+            local numericId = tonumber(songId)
+            local args = {"ToolMusicText", songId, [4] = true}
+            game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("PlayerToolEvent"):FireServer(unpack(args))
+            
+            if numericId then
+                task.spawn(function()
+                    local success, info = pcall(function()
+                        return MarketplaceService:GetProductInfo(numericId)
+                    end)
+                    if success and info and info.Name then
+                        songNameLabel.Text = "🎶 กำลังเล่น: " .. info.Name
+                    else
+                        songNameLabel.Text = "🎶 กำลังเล่น: (ไม่พบชื่อเพลง)"
+                    end
+                end)
+            else
+                songNameLabel.Text = "🎶 กำลังเล่น: ส่งไอดีสำเร็จ"
+            end
+        else
+            -- สถานะ: กดหยุด
+            isPlaying = false
+            button.Text = "เปิด"
+            songNameLabel.Text = "🎶 กำลังเล่น: -"
+            
+            -- ส่งค่าเคลียร์เพลง (ส่งค่าว่างหรือ 0 ไปหยุด)
+            local args = {"ToolMusicText", "", [4] = true}
+            pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("PlayerToolEvent"):FireServer(unpack(args))
+            end)
+        end
+    end
+end)
+
+print("Play/Stop UI Loaded Successfully!")
