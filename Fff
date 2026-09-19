@@ -1,0 +1,382 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local guiInset = GuiService:GetGuiInset()
+
+-- การตั้งค่าสถานะระบบ (Toggle States)
+local config = {
+    AimLock = false,
+    ShowFov = true,
+    FovRadius = 150,
+    SmoothFactor = 0.1,
+    EspEnabled = true,
+    WallCheck = true
+}
+
+local toggleKey = Enum.KeyCode.RightControl -- กดปุ่ม RightControl เพื่อซ่อน/แสดงเมนู UI
+
+-- สร้าง ScreenGui หลัก
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ModernCheatHub"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- 1. วงกลม FOV (สร้างลอยไว้บนจอ)
+local fovCircle = Instance.new("Frame")
+fovCircle.Name = "FOVCircle"
+fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+fovCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+fovCircle.BackgroundTransparency = 0.85
+fovCircle.BorderSizePixel = 0
+fovCircle.Visible = config.ShowFov
+fovCircle.Parent = screenGui
+
+local fovCorner = Instance.new("UICorner")
+fovCorner.CornerRadius = UDim.new(1, 0)
+fovCorner.Parent = fovCircle
+
+local function updateFovCircleDisplay()
+    local screenSize = camera.ViewportSize
+    local centerX = screenSize.X / 2
+    local centerY = screenSize.Y / 2 - guiInset.Y.Y/2
+    fovCircle.Position = UDim2.new(0, centerX, 0, centerY)
+    fovCircle.Size = UDim2.new(0, config.FovRadius * 2, 0, config.FovRadius * 2)
+end
+updateFovCircleDisplay()
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateFovCircleDisplay)
+
+-- 2. เส้น Tracer และ Distance Text
+local tracerLine = Instance.new("Frame")
+tracerLine.Name = "TracerLine"
+tracerLine.AnchorPoint = Vector2.new(0, 0.5)
+tracerLine.BackgroundColor3 = Color3.fromRGB(0, 170, 255) -- สีฟ้าแนวโมเดิร์น
+tracerLine.BorderSizePixel = 0
+tracerLine.Visible = false
+tracerLine.Parent = screenGui
+
+local distanceText = Instance.new("TextLabel")
+distanceText.Name = "DistanceText"
+distanceText.AnchorPoint = Vector2.new(0.5, 1)
+distanceText.BackgroundTransparency = 1
+distanceText.TextColor3 = Color3.fromRGB(255, 255, 255)
+distanceText.TextStrokeTransparency = 0.3
+distanceText.TextSize = 13
+distanceText.Font = Enum.Font.GothamBold
+distanceText.Visible = false
+distanceText.Parent = screenGui
+
+-- 3. สร้างหน้าต่าง Main UI (Modern Dark Theme)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 320, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true -- สามารถลากหน้าต่างไปมาได้
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+-- แถบหัวข้อ (Top Bar)
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 45)
+topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0, 10)
+topCorner.Parent = topBar
+
+-- แก้ขอบล่างของ TopBar ให้เป็นเหลี่ยมปกติ
+local topFix = Instance.new("Frame")
+topFix.Size = UDim2.new(1, 0, 0, 10)
+topFix.Position = UDim2.new(0, 0, 1, -10)
+topFix.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+topFix.BorderSizePixel = 0
+topFix.Parent = topBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -20, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚡ AIM LOCK & ESP HUB"
+titleLabel.TextColor3 = Color3.fromRGB(0, 170, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = topBar
+
+-- Container สำหรับปุ่มเปิด/ปิดฟังก์ชันต่างๆ
+local container = Instance.new("ScrollingFrame")
+container.Size = UDim2.new(1, -20, 1, -60)
+container.Position = UDim2.new(0, 10, 0, 52)
+container.BackgroundTransparency = 1
+container.BorderSizePixel = 0
+container.CanvasSize = UDim2.new(0, 0, 0, 250)
+container.ScrollBarThickness = 4
+container.Parent = mainFrame
+
+local uiList = Instance.new("UIListLayout")
+uiList.SortOrder = Enum.SortOrder.LayoutOrder
+uiList.Padding = UDim.new(0, 10)
+uiList.Parent = container
+
+-- ฟังก์ชันสร้างปุ่ม Toggle แบบสวยงาม
+local function createToggle(name, defaultState, callback)
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(1, 0, 0, 40)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.AutoButtonColor = false
+    toggleBtn.Text = ""
+    toggleBtn.Parent = container
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = toggleBtn
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleBtn
+
+    local indicator = Instance.new("Frame")
+    indicator.Size = UDim2.new(0, 20, 0, 20)
+    indicator.Position = UDim2.new(1, -30, 0.5, -10)
+    indicator.BackgroundColor3 = defaultState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 70)
+    indicator.BorderSizePixel = 0
+    indicator.Parent = toggleBtn
+
+    local indCorner = Instance.new("UICorner")
+    indCorner.CornerRadius = UDim.new(1, 0)
+    indCorner.Parent = indicator
+
+    local state = defaultState
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        
+        -- แอนิเมชันเปลี่ยนสีปุ่มเปิด/ปิด
+        TweenService:Create(indicator, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 70)
+        }):Play()
+
+        callback(state)
+    end)
+end
+
+-- สร้างปุ่มเปิด/ปิดฟังก์ชันต่างๆ ในเมนู
+createToggle("Aim Lock (Auto Head)", config.AimLock, function(state)
+    config.AimLock = state
+end)
+
+createToggle("Show FOV Circle", config.ShowFov, function(state)
+    config.ShowFov = state
+    fovCircle.Visible = state
+end)
+
+createToggle("Player ESP (Highlight)", config.EspEnabled, function(state)
+    config.EspEnabled = state
+    -- เปิด/ปิด Highlight ทั้งหมดในเกม
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and p.Character:FindFirstChild("ESP_Highlight") then
+            p.Character.ESP_Highlight.Enabled = state
+        end
+        if p.Character and p.Character:FindFirstChild("ESP_HealthBar") then
+            p.Character.ESP_HealthBar.Enabled = state
+        end
+    end
+end)
+
+createToggle("Wall Check (Raycast)", config.WallCheck, function(state)
+    config.WallCheck = state
+end)
+
+-- ปุ่มซ่อน/แสดง UI ด้วยปุ่มคีย์บอร์ด
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == toggleKey then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+-- ระบบ ESP พื้นฐาน
+local function setupPlayerESP(player)
+    if player == localPlayer then return end
+
+    local function setupCharacter(character)
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Adornee = character
+        highlight.FillColor = Color3.fromRGB(255, 50, 50)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineTransparency = 0
+        highlight.Enabled = config.EspEnabled
+        highlight.Parent = character
+
+        local head = character:WaitForChild("Head", 5)
+        local humanoid = character:WaitForChild("Humanoid", 5)
+        
+        if head and humanoid then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "ESP_HealthBar"
+            billboard.Size = UDim2.new(0, 100, 0, 40)
+            billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Adornee = head
+            billboard.Enabled = config.EspEnabled
+            billboard.Parent = character
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, 0, 0, 20)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = player.Name
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextSize = 12
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.Parent = billboard
+
+            local healthBg = Instance.new("Frame")
+            healthBg.Size = UDim2.new(1, 0, 0, 5)
+            healthBg.Position = UDim2.new(0, 0, 0, 20)
+            healthBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            healthBg.BorderSizePixel = 0
+            healthBg.Parent = billboard
+
+            local healthBar = Instance.new("Frame")
+            healthBar.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
+            healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+            healthBar.BorderSizePixel = 0
+            healthBar.Parent = healthBg
+
+            humanoid.HealthChanged:Connect(function(health)
+                if healthBar and humanoid.MaxHealth > 0 then
+                    healthBar.Size = UDim2.new(math.clamp(health / humanoid.MaxHealth, 0, 1), 0, 1, 0)
+                end
+            end)
+        end
+    end
+
+    player.CharacterAdded:Connect(setupCharacter)
+    if player.Character then
+        task.spawn(function() setupCharacter(player.Character) end)
+    end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    setupPlayerESP(p)
+end
+Players.PlayerAdded:Connect(setupPlayerESP)
+
+-- ฟังก์ชันเช็คสิ่งกีดขวาง (Wall Check)
+local function isVisible(targetHead, character)
+    if not config.WallCheck then return true end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = RaycastParams.FilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, character}
+    raycastParams.IgnoreWater = true
+
+    local origin = camera.CFrame.Position
+    local direction = targetHead.Position - origin
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    
+    if result == nil or result.Instance:IsDescendantOf(character) then
+        return true
+    end
+    return false
+end
+
+-- ฟังก์ชันค้นหาเป้าหมาย
+local function getClosestPlayerInFov()
+    local closestHead = nil
+    local shortestDistance = math.huge
+    local centerX = camera.ViewportSize.X / 2
+    local centerY = camera.ViewportSize.Y / 2 - guiInset.Y.Y/2
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local head = character:FindFirstChild("Head")
+
+            if humanoid and humanoid.Health > 0 and head then
+                local screenPoint, onScreen = camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local headVector = Vector2.new(screenPoint.X, screenPoint.Y - guiInset.Y.Y/2)
+                    local centerVector = Vector2.new(centerX, centerY)
+                    local distanceFromCenter = (headVector - centerVector).Magnitude
+
+                    if distanceFromCenter <= config.FovRadius and isVisible(head, character) then
+                        if distanceFromCenter < shortestDistance then
+                            shortestDistance = distanceFromCenter
+                            closestHead = head
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestHead
+end
+
+-- ลูปหลักทำงานทุกเฟรม
+RunService.RenderStepped:Connect(function()
+    local targetHead = getClosestPlayerInFov()
+    
+    -- ควบคุม Aim Lock
+    if config.AimLock and targetHead then
+        local currentCameraCFrame = camera.CFrame
+        local targetCFrame = CFrame.new(currentCameraCFrame.Position, targetHead.Position)
+        camera.CFrame = currentCameraCFrame:Lerp(targetCFrame, config.SmoothFactor)
+    end
+
+    -- จัดการเส้น Tracer และบอกระยะ
+    if targetHead then
+        local screenSize = camera.ViewportSize
+        local centerX = screenSize.X / 2
+        local centerY = screenSize.Y / 2 - guiInset.Y.Y/2
+        
+        local screenPoint, onScreen = camera:WorldToViewportPoint(targetHead.Position)
+        if onScreen then
+            local headPos2D = Vector2.new(screenPoint.X, screenPoint.Y - guiInset.Y.Y/2)
+            local centerVector = Vector2.new(centerX, centerY)
+            local distanceVector = headPos2D - centerVector
+            local length = distanceVector.Magnitude
+            local angle = math.deg(math.atan2(distanceVector.Y, distanceVector.X))
+
+            tracerLine.Position = UDim2.new(0, centerX, 0, centerY)
+            tracerLine.Size = UDim2.new(0, length, 0, 2)
+            tracerLine.Rotation = angle
+            tracerLine.Visible = true
+
+            local realDistance = (camera.CFrame.Position - targetHead.Position).Magnitude
+            distanceText.Text = string.format("%.1f m", realDistance)
+            distanceText.Position = UDim2.new(0, (centerX + headPos2D.X) / 2, 0, (centerY + headPos2D.Y) / 2 - 10)
+            distanceText.Visible = true
+        else
+            tracerLine.Visible = false
+            distanceText.Visible = false
+        end
+    else
+        tracerLine.Visible = false
+        distanceText.Visible = false
+    end
+end)
