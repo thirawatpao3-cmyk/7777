@@ -1,0 +1,124 @@
+using Unity.Netcode;
+using UnityEngine;
+
+public class PlayerController : NetworkBehaviour
+{
+    private Rigidbody2D rb;
+    private SpriteRenderer spriteRenderer;
+    
+    [Header("สถานะการทำงานของสคริปต์")]
+    public bool isScriptEnabled = true; // ใช้สำหรับเปิด/ปิดฟังก์ชันผ่าน UI
+
+    [Header("ความเร็วในการเคลื่อนที่")]
+    public float walkSpeed = 5.0f;
+    public float sprintSpeed = 9.0f;
+    private float moveSpeed;
+
+    [Header("ค่าพลังการกระโดด")]
+    public float jumpForce = 7.0f; 
+    
+    [Header("การเช็คพื้น")]
+    public Transform groundCheck;
+    public LayerMask groundLayer;
+    private bool isGrounded;
+
+    [Header("ระบบล่องหน")]
+    private NetworkVariable<bool> isInvisible = new NetworkVariable<bool>(false);
+    public float invisibleAlpha = 0.2f; 
+    private Color originalColor;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody2D>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        moveSpeed = walkSpeed;
+
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
+
+        rb.collisionDetectionMode2D = CollisionDetectionMode2D.Continuous;
+        isInvisible.OnValueChanged += OnInvisibilityChanged;
+    }
+
+    public override void OnDestroy()
+    {
+        base.OnDestroy();
+        isInvisible.OnValueChanged -= OnInvisibilityChanged;
+    }
+
+    void Update()
+    {
+        if (!IsOwner) return;
+
+        // ถ้าสคริปต์ถูกปิดผ่าน UI จะไม่ให้ทำงานใน Update/FixedUpdate
+        if (!isScriptEnabled) return;
+
+        // 1. เช็คพื้น
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, 0.2f, groundLayer);
+
+        // 2. ระบบวิ่งเร็ว (กด Left Shift)
+        moveSpeed = Input.GetKey(KeyCode.LeftShift) ? sprintSpeed : walkSpeed;
+
+        // 3. ระบบกระโดด (กด Spacebar)
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+        {
+            Jump();
+        }
+
+        // 4. ระบบกดปุ่มเพื่อสลับสถานะล่องหน (ใช้ปุ่ม V)
+        if (Input.GetKeyDown(KeyCode.V))
+        {
+            ToggleInvisibilityServerRpc();
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (!IsOwner) return;
+        if (!isScriptEnabled) 
+        {
+            // หยุดความเร็วเมื่อปิดสคริปต์
+            rb.velocity = new Vector2(0, rb.velocity.y);
+            return;
+        }
+
+        // 5. ระบบเคลื่อนที่ซ้าย-ขวา
+        float moveInput = Input.GetAxisRaw("Horizontal");
+        rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
+    }
+
+    void Jump()
+    {
+        rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+    }
+
+    [ServerRpc]
+    void ToggleInvisibilityServerRpc()
+    {
+        isInvisible.Value = !isInvisible.Value;
+    }
+
+    void OnInvisibilityChanged(bool previousValue, bool newValue)
+    {
+        if (spriteRenderer == null) return;
+
+        Color color = originalColor;
+        if (newValue)
+        {
+            color.a = invisibleAlpha;
+        }
+        else
+        {
+            color.a = 1.0f;
+        }
+        spriteRenderer.color = color;
+    }
+
+    // ฟังก์ชันสำหรับให้ UI เรียกเพื่อเปิด/ปิดฟังก์ชันตัวละคร
+    public void ToggleFeature(bool status)
+    {
+        isScriptEnabled = status;
+    }
+}
