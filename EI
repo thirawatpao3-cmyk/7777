@@ -1,0 +1,142 @@
+-- สร้าง ScreenGui ใน PlayerGui
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- ลบ UI เก่าหากมีอยู่
+if CoreGui:FindFirstChild("SkateBoardUI") then
+	CoreGui.SkateBoardUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SkateBoardUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+-- สร้าง Main Frame
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 300, 0, 240)
+Frame.Position = UDim2.new(0.5, -150, 0.4, -120)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true -- สามารถลากขยับตำแหน่ง UI ได้
+Frame.Parent = ScreenGui
+
+-- ใส่ มุมโค้ง ให้ Frame
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = Frame
+
+-- หัวข้อ (Title Bar)
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "SkateBoard Hub"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+-- ตัวแปรการตั้งค่า
+local isRunning = false
+local times = 5
+local interval = 0.5
+
+-- [1] ช่องกรอกจำนวนครั้ง (Times Input)
+local TimesInput = Instance.new("TextBox")
+TimesInput.Size = UDim2.new(0.9, 0, 0, 35)
+TimesInput.Position = UDim2.new(0.05, 0, 0.2, 0)
+TimesInput.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+TimesInput.Text = "จำนวนครั้ง (ปัจจุบัน: 5)"
+TimesInput.TextColor3 = Color3.fromRGB(200, 200, 200)
+TimesInput.TextSize = 14
+TimesInput.Font = Enum.Font.SourceSans
+TimesInput.Parent = Frame
+
+TimesInput.FocusLost:Connect(function()
+	local val = tonumber(TimesInput.Text)
+	if val then
+		times = val
+		TimesInput.Text = "จำนวนครั้ง: " .. times
+	else
+		TimesInput.Text = "จำนวนครั้ง: " .. times
+	end
+end)
+
+-- [2] ช่องกรอกวินาที (Interval Input)
+local IntervalInput = Instance.new("TextBox")
+IntervalInput.Size = UDim2.new(0.9, 0, 0, 35)
+IntervalInput.Position = UDim2.new(0.05, 0, 0.38, 0)
+IntervalInput.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+IntervalInput.Text = "ระยะเวลา/วินาที (ปัจจุบัน: 0.5)"
+IntervalInput.TextColor3 = Color3.fromRGB(200, 200, 200)
+IntervalInput.TextSize = 14
+IntervalInput.Font = Enum.Font.SourceSans
+IntervalInput.Parent = Frame
+
+IntervalInput.FocusLost:Connect(function()
+	local val = tonumber(IntervalInput.Text)
+	if val then
+		interval = val
+		IntervalInput.Text = "ระยะเวลา/วินาที: " .. interval
+	else
+		IntervalInput.Text = "ระยะเวลา/วินาที: " .. interval
+	end
+end)
+
+-- [3] ปุ่มส่งตามจำนวนครั้ง (Button)
+local RunButton = Instance.new("TextButton")
+RunButton.Size = UDim2.new(0.9, 0, 0, 35)
+RunButton.Position = UDim2.new(0.05, 0, 0.56, 0)
+RunButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+RunButton.Text = "เริ่มเรียกตามจำนวนครั้ง"
+RunButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RunButton.TextSize = 14
+RunButton.Font = Enum.Font.SourceSansBold
+RunButton.Parent = Frame
+
+RunButton.MouseButton1Click:Connect(function()
+	task.spawn(function()
+		for i = 1, times do
+			local args = { "SkateBoard" }
+			game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s"):FireServer(unpack(args))
+			task.wait(interval)
+		end
+	end)
+end)
+
+-- [4] ปุ่ม Toggle เปิด/ปิด การวนลูป (Toggle Button)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0.9, 0, 0, 35)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.74, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleButton.Text = "สถานะ: ปิด (Auto Loop)"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.Parent = Frame
+
+ToggleButton.MouseButton1Click:Connect(function()
+	isRunning = not isRunning
+	
+	if isRunning then
+		ToggleButton.Text = "สถานะ: เปิดอยู่ (Auto Loop)"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+		
+		task.spawn(function()
+			while isRunning do
+				local args = { "SkateBoard" }
+				game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s"):FireServer(unpack(args))
+				task.wait(interval)
+			end
+		end)
+	else
+		ToggleButton.Text = "สถานะ: ปิด (Auto Loop)"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	end
+end)
