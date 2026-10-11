@@ -1,0 +1,324 @@
+-- สร้าง ScreenGui ใน CoreGui
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- ลบ UI เก่าหากมีอยู่
+if CoreGui:FindFirstChild("SkateBoardHub") then
+	CoreGui.SkateBoardHub:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SkateBoardHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+-- ================= [ ตั้งค่าระบบคีย์ ] =================
+local CORRECT_KEY = "pao" -- ตั้งค่าคีย์เป็น pao เรียบร้อยแล้ว
+-- ====================================================
+
+-- ================= [ 1. หน้าต่างใส่คีย์ (Key System Frame) ] =================
+local KeyFrame = Instance.new("Frame")
+KeyFrame.Size = UDim2.new(0, 320, 0, 180)
+KeyFrame.Position = UDim2.new(0.5, -160, 0.4, -90)
+KeyFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+KeyFrame.BorderSizePixel = 0
+KeyFrame.Active = true
+KeyFrame.Draggable = true
+KeyFrame.Parent = ScreenGui
+
+local KeyCorner = Instance.new("UICorner")
+KeyCorner.CornerRadius = UDim.new(0, 12)
+KeyCorner.Parent = KeyFrame
+
+local KeyTitle = Instance.new("TextLabel")
+KeyTitle.Size = UDim2.new(1, 0, 0, 40)
+KeyTitle.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
+KeyTitle.Text = "  SkateBoard Hub - Key System"
+KeyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyTitle.TextSize = 15
+KeyTitle.Font = Enum.Font.GothamBold
+KeyTitle.TextXAlignment = Enum.TextXAlignment.Left
+KeyTitle.Parent = KeyFrame
+
+local KeyTitleCorner = Instance.new("UICorner")
+KeyTitleCorner.CornerRadius = UDim.new(0, 12)
+KeyTitleCorner.Parent = KeyTitle
+
+-- ช่องใส่คีย์
+local KeyInput = Instance.new("TextBox")
+KeyInput.Size = UDim2.new(0.9, 0, 0, 38)
+KeyInput.Position = UDim2.new(0.05, 0, 0.32, 0)
+KeyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+KeyInput.PlaceholderText = "กรุณากรอกคีย์ที่นี่..."
+KeyInput.Text = ""
+KeyInput.TextColor3 = Color3.fromRGB(220, 220, 220)
+KeyInput.TextSize = 13
+KeyInput.Font = Enum.Font.Gotham
+KeyInput.Parent = KeyFrame
+
+local KIC = Instance.new("UICorner")
+KIC.CornerRadius = UDim.new(0, 8)
+KIC.Parent = KeyInput
+
+-- ปุ่มยืนยันคีย์
+local SubmitKeyBtn = Instance.new("TextButton")
+SubmitKeyBtn.Size = UDim2.new(0.42, 0, 0, 38)
+SubmitKeyBtn.Position = UDim2.new(0.05, 0, 0.62, 0)
+SubmitKeyBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+SubmitKeyBtn.Text = "ยืนยันคีย์"
+SubmitKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitKeyBtn.TextSize = 13
+SubmitKeyBtn.Font = Enum.Font.GothamBold
+SubmitKeyBtn.Parent = KeyFrame
+
+local SKC = Instance.new("UICorner")
+SKC.CornerRadius = UDim.new(0, 8)
+SKC.Parent = SubmitKeyBtn
+
+-- ปุ่มรับคีย์ (เชื่อมโยงไปที่ Discord ตามที่ขอ)
+local GetKeyBtn = Instance.new("TextButton")
+GetKeyBtn.Size = UDim2.new(0.42, 0, 0, 38)
+GetKeyBtn.Position = UDim2.new(0.53, 0, 0.62, 0)
+GetKeyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+GetKeyBtn.Text = "รับคีย์ (Copy Link)"
+GetKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GetKeyBtn.TextSize = 13
+GetKeyBtn.Font = Enum.Font.GothamBold
+GetKeyBtn.Parent = KeyFrame
+
+local GKC = Instance.new("UICorner")
+GKC.CornerRadius = UDim.new(0, 8)
+GKC.Parent = GetKeyBtn
+
+-- ข้อความแจ้งเตือนสถานะคีย์
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0.05, 0, 0.83, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = ""
+StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+StatusLabel.TextSize = 12
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Parent = KeyFrame
+
+
+-- ================= [ 2. ปุ่มเปิด-ปิดหน้าต่างหลัก (Floating Button) ] =================
+local OpenButton = Instance.new("TextButton")
+OpenButton.Size = UDim2.new(0, 50, 0, 50)
+OpenButton.Position = UDim2.new(0, 20, 0.5, -25)
+OpenButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+OpenButton.Text = "🛹"
+OpenButton.TextSize = 24
+OpenButton.Active = true
+OpenButton.Draggable = true
+OpenButton.Visible = false -- ซ่อนไว้จนกว่าจะใส่คีย์ผ่าน
+OpenButton.Parent = ScreenGui
+
+local OpenButtonCorner = Instance.new("UICorner")
+OpenButtonCorner.CornerRadius = UDim.new(1, 0)
+OpenButtonCorner.Parent = OpenButton
+
+
+-- ================= [ 3. หน้าต่างหลักของสคริปต์ (Main Window) ] =================
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 300, 0, 320)
+Frame.Position = UDim2.new(0.5, -150, 0.4, -160)
+Frame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Visible = false
+Frame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 12)
+FrameCorner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
+Title.Text = "  SkateBoard Hub"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = Title
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 40, 0, 40)
+CloseBtn.Position = UDim2.new(1, -40, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = Frame
+
+CloseBtn.MouseButton1Click:Connect(function()
+	Frame.Visible = false
+end)
+
+OpenButton.MouseButton1Click:Connect(function()
+	Frame.Visible = not Frame.Visible
+end)
+
+
+-- ================= [ ระบบตรวจสอบคีย์เมื่อกดปุ่ม ] =================
+SubmitKeyBtn.MouseButton1Click:Connect(function()
+	if KeyInput.Text == CORRECT_KEY then
+		StatusLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+		StatusLabel.Text = "ใส่คีย์ถูกต้อง! กำลังเปิดเมนู..."
+		
+		task.wait(1)
+		KeyFrame.Visible = false   -- ปิดหน้าต่างใส่คีย์
+		OpenButton.Visible = true  -- แสดงปุ่มลอยเปิด-ปิดเมนูหลัก
+		Frame.Visible = true       -- เปิดหน้าต่างหลักขึ้นมาทันที
+	else
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+		StatusLabel.Text = "คีย์ไม่ถูกต้อง! กรุณาลองใหม่อีกครั้ง"
+	end
+end)
+
+-- ฟังก์ชันปุ่มรับคีย์ (คัดลอกลิงก์ Discord)
+GetKeyBtn.MouseButton1Click:Connect(function()
+	setclipboard("https://discord.gg/RE4nv6eN")
+	StatusLabel.TextColor3 = Color3.fromRGB(80, 200, 255)
+	StatusLabel.Text = "คัดลอกลิงก์ Discord ไปยังคลิปบอร์ดแล้ว!"
+end)
+
+
+-- ================= [ ระบบการทำงานภายใน ] =================
+local isRunning = false
+local times = 5
+local interval = 0.5
+
+-- [1] ช่องกรอกจำนวนครั้ง (Times Input)
+local TimesInput = Instance.new("TextBox")
+TimesInput.Size = UDim2.new(0.9, 0, 0, 38)
+TimesInput.Position = UDim2.new(0.05, 0, 0.15, 0)
+TimesInput.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+TimesInput.Text = "จำนวนครั้ง: 5"
+TimesInput.TextColor3 = Color3.fromRGB(220, 220, 220)
+TimesInput.TextSize = 13
+TimesInput.Font = Enum.Font.Gotham
+TimesInput.Parent = Frame
+
+local TC = Instance.new("UICorner")
+TC.CornerRadius = UDim.new(0, 8)
+TC.Parent = TimesInput
+
+TimesInput.FocusLost:Connect(function()
+	local val = tonumber(TimesInput.Text:match("%d+"))
+	if val then
+		times = val
+	end
+	TimesInput.Text = "จำนวนครั้ง: " .. times
+end)
+
+-- [2] ช่องกรอกวินาที (Interval Input)
+local IntervalInput = Instance.new("TextBox")
+IntervalInput.Size = UDim2.new(0.9, 0, 0, 38)
+IntervalInput.Position = UDim2.new(0.05, 0, 0.30, 0)
+IntervalInput.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+IntervalInput.Text = "ระยะเวลา/วินาที: 0.5"
+IntervalInput.TextColor3 = Color3.fromRGB(220, 220, 220)
+IntervalInput.TextSize = 13
+IntervalInput.Font = Enum.Font.Gotham
+IntervalInput.Parent = Frame
+
+local IC = Instance.new("UICorner")
+IC.CornerRadius = UDim.new(0, 8)
+IC.Parent = IntervalInput
+
+IntervalInput.FocusLost:Connect(function()
+	local val = tonumber(IntervalInput.Text:match("[%d%.]+"))
+	if val then
+		interval = val
+	end
+	IntervalInput.Text = "ระยะเวลา/วินาที: " .. interval
+end)
+
+-- [3] ปุ่มส่งตามจำนวนครั้ง (Button)
+local RunButton = Instance.new("TextButton")
+RunButton.Size = UDim2.new(0.9, 0, 0, 38)
+RunButton.Position = UDim2.new(0.05, 0, 0.45, 0)
+RunButton.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+RunButton.Text = "เรียกตามจำนวนครั้ง"
+RunButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RunButton.TextSize = 13
+RunButton.Font = Enum.Font.GothamBold
+RunButton.Parent = Frame
+
+local RC = Instance.new("UICorner")
+RC.CornerRadius = UDim.new(0, 8)
+RC.Parent = RunButton
+
+RunButton.MouseButton1Click:Connect(function()
+	task.spawn(function()
+		for i = 1, times do
+			local args = { "SkateBoard" }
+			game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s"):FireServer(unpack(args))
+			task.wait(interval)
+		end
+	end)
+end)
+
+-- [4] ปุ่ม Toggle เปิด/ปิด การวนลูป (Toggle Button)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0.9, 0, 0, 38)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.60, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleButton.Text = "Auto Loop: ปิด"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 13
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Parent = Frame
+
+local TGC = Instance.new("UICorner")
+TGC.CornerRadius = UDim.new(0, 8)
+TGC.Parent = ToggleButton
+
+ToggleButton.MouseButton1Click:Connect(function()
+	isRunning = not isRunning
+	
+	if isRunning then
+		ToggleButton.Text = "Auto Loop: เปิดอยู่"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+		
+		task.spawn(function()
+			while isRunning do
+				local args = { "SkateBoard" }
+				game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s"):FireServer(unpack(args))
+				task.wait(interval)
+			end
+		end)
+	else
+		ToggleButton.Text = "Auto Loop: ปิด"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	end
+end)
+
+-- [5] ปุ่มเปิด-ปิดเมนูหลัก (Minimize / Toggle Main Menu Button)
+local ToggleMenuBtn = Instance.new("TextButton")
+ToggleMenuBtn.Size = UDim2.new(0.9, 0, 0, 38)
+ToggleMenuBtn.Position = UDim2.new(0.05, 0, 0.77, 0)
+ToggleMenuBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
+ToggleMenuBtn.Text = "ซ่อนเมนูหลัก"
+ToggleMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleMenuBtn.TextSize = 13
+ToggleMenuBtn.Font = Enum.Font.GothamBold
+ToggleMenuBtn.Parent = Frame
+
+local TMC = Instance.new("UICorner")
+TMC.CornerRadius = UDim.new(0, 8)
+TMC.Parent = ToggleMenuBtn
+
+ToggleMenuBtn.MouseButton1Click:Connect(function()
+	Frame.Visible = false
+	OpenButton.Visible = true
+end)
