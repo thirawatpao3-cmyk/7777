@@ -1,0 +1,147 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- 1. สร้าง ScreenGui หลัก
+local sg = Instance.new("ScreenGui", playerGui)
+sg.Name = "BeautifulPaoUI"
+sg.ResetOnSpawn = false
+
+-----------------------------------------------------------------
+-- 2. หน้าต่างกรอกคีย์ (Key UI)
+-----------------------------------------------------------------
+local keyFrame = Instance.new("Frame", sg)
+keyFrame.Size = UDim2.new(0, 320, 0, 200)
+keyFrame.Position = UDim2.new(0.5, -160, 0.5, -100)
+keyFrame.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
+keyFrame.BorderSizePixel = 0
+Instance.new("UICorner", keyFrame).CornerRadius = UDim.new(0, 12)
+
+-- หัวข้อ Key UI
+local keyTitle = Instance.new("TextLabel", keyFrame)
+keyTitle.Size = UDim2.new(1, 0, 0, 50)
+keyTitle.BackgroundTransparency = 1
+keyTitle.Text = "PAO SYSTEM"
+keyTitle.TextColor3 = Color3.fromRGB(220, 225, 235)
+keyTitle.TextSize = 18
+keyTitle.Font = Enum.Font.GothamBold
+
+local keySubTitle = Instance.new("TextLabel", keyFrame)
+keySubTitle.Size = UDim2.new(1, 0, 0, 20)
+keySubTitle.Position = UDim2.new(0, 0, 0, 38)
+keySubTitle.BackgroundTransparency = 1
+keySubTitle.Text = "กรุณากรอกคีย์เพื่อเข้าใช้งาน"
+keySubTitle.TextColor3 = Color3.fromRGB(140, 145, 160)
+keySubTitle.TextSize = 12
+keySubTitle.Font = Enum.Font.Gotham
+
+-- ช่องกรอกคีย์
+local keyInput = Instance.new("TextBox", keyFrame)
+keyInput.Size = UDim2.new(0.85, 0, 0, 40)
+keyInput.Position = UDim2.new(0.075, 0, 0.38, 0)
+keyInput.BackgroundColor3 = Color3.fromRGB(33, 36, 44)
+keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+keyInput.PlaceholderText = "พิมพ์คีย์ที่นี่..."
+keyInput.PlaceholderColor3 = Color3.fromRGB(100, 105, 120)
+keyInput.Text = ""
+keyInput.TextSize = 13
+keyInput.Font = Enum.Font.Gotham
+keyInput.ClearTextOnFocus = false
+Instance.new("UICorner", keyInput).CornerRadius = UDim.new(0, 8)
+
+-- ปุ่มยืนยันคีย์
+local submitBtn = Instance.new("TextButton", keyFrame)
+submitBtn.Size = UDim2.new(0.85, 0, 0, 40)
+submitBtn.Position = UDim2.new(0.075, 0, 0.65, 0)
+submitBtn.BackgroundColor3 = Color3.fromRGB(86, 175, 150) -- พาสเทลเขียวอมฟ้าสบายตา
+submitBtn.TextColor3 = Color3.fromRGB(20, 30, 28)
+submitBtn.Text = "ยืนยันเข้าใช้งาน"
+submitBtn.TextSize = 14
+submitBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", submitBtn).CornerRadius = UDim.new(0, 8)
+
+-----------------------------------------------------------------
+-- 3. หน้าต่างหลัก (Main UI)
+-----------------------------------------------------------------
+local mainFrame = Instance.new("Frame", sg)
+mainFrame.Size = UDim2.new(0, 420, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -140)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+-- แถบหัวข้อด้านบน (Top Bar)
+local topBar = Instance.new("Frame", mainFrame)
+topBar.Size = UDim2.new(1, 0, 0, 45)
+topBar.BackgroundTransparency = 1
+
+local mainTitle = Instance.new("TextLabel", topBar)
+mainTitle.Size = UDim2.new(1, -50, 1, 0)
+mainTitle.Position = UDim2.new(0, 15, 0, 0)
+mainTitle.BackgroundTransparency = 1
+mainTitle.Text = "PAO HUB  |  [ กด K เพื่อย่อ/เปิด ]"
+mainTitle.TextColor3 = Color3.fromRGB(220, 225, 235)
+mainTitle.TextSize = 14
+mainTitle.Font = Enum.Font.GothamBold
+mainTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+-- ปุ่มย่อ/ปิด (X) บนมุมขวา
+local closeBtn = Instance.new("TextButton", topBar)
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -38, 0.5, -15)
+closeBtn.BackgroundColor3 = Color3.fromRGB(33, 36, 44)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(180, 185, 200)
+closeBtn.TextSize = 12
+closeBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+-- พื้นที่แสดงเนื้อหาหลัก
+local contentArea = Instance.new("Frame", mainFrame)
+contentArea.Size = UDim2.new(1, -30, 1, -60)
+contentArea.Position = UDim2.new(0, 15, 0, 50)
+contentArea.BackgroundColor3 = Color3.fromRGB(18, 20, 24)
+Instance.new("UICorner", contentArea).CornerRadius = UDim.new(0, 8)
+
+local welcomeText = Instance.new("TextLabel", contentArea)
+welcomeText.Size = UDim2.new(1, 0, 1, 0)
+welcomeText.BackgroundTransparency = 1
+welcomeText.Text = "ยินดีต้อนรับสู่ระบบหลัก!\nพร้อมใช้งานเรียบร้อยแล้ว"
+welcomeText.TextColor3 = Color3.fromRGB(150, 210, 190)
+welcomeText.TextSize = 15
+welcomeText.Font = Enum.Font.Gotham
+
+-----------------------------------------------------------------
+-- 4. ระบบการทำงาน (Logic System)
+-----------------------------------------------------------------
+local CORRECT_KEY = "pao"
+local isUnlocked = false
+
+-- ตรวจสอบคีย์
+submitBtn.MouseButton1Click:Connect(function()
+	if keyInput.Text == CORRECT_KEY then
+		isUnlocked = true
+		keyFrame.Visible = false
+		mainFrame.Visible = true
+	else
+		keyInput.Text = ""
+		keyInput.PlaceholderText = "คีย์ไม่ถูกต้อง!"
+		keyInput.BackgroundColor3 = Color3.fromRGB(60, 30, 35)
+		task.wait(1.2)
+		keyInput.BackgroundColor3 = Color3.fromRGB(33, 36, 44)
+		keyInput.PlaceholderText = "พิมพ์คีย์ที่นี่..."
+	end
+end)
+
+-- ปุ่มปิด (X)
+closeBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+end)
+
+-- กดปุ่ม K เพื่อย่อ/เปิด
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not gameProcessed and isUnlocked and input.KeyCode == Enum.KeyCode.K then
+		mainFrame.Visible = not mainFrame.Visible
+	end
+end)
