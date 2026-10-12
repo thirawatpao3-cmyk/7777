@@ -1,0 +1,66 @@
+-- โหลด Fluent Library จาก Official Source
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/main.lua"))()
+
+-- สร้างหน้าต่างหลัก (Window)
+local Window = Fluent:CreateWindow({
+    Title = "Ultimate Hub | Super UI",
+    SubTitle = "v1.0.0",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true, -- เปิดเอฟเฟกต์เบลอพื้นหลัง (Acrylic Blur)
+    Theme = "Dark", -- ธีมสีมืดพรีเมียม
+    MinimizeKey = Enum.KeyCode.LeftControl -- ปุ่มย่อ/ขยายหน้าต่างบนคีย์บอร์ด (เปลี่ยนได้ตามต้องการ)
+})
+
+-- สร้าง Tabs (หมวดหมู่เมนูด้านข้าง)
+local Tabs = {
+    Main = Window:AddTab({ Title = "หน้าหลัก", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "ตั้งค่า", Icon = "settings" })
+}
+
+-- เพิ่มเนื้อหาใน Tab หน้าหลัก
+Tabs.Main:AddParagraph({
+    Title = "ยินดีต้อนรับ!",
+    Content = "นี่คือ UI ดีไซน์สุดล้ำ สมูท และสวยงามที่สุด\n- กดปุ่ม Left Control เพื่อย่อ/เปิดหน้าต่าง\n- รองรับการใช้งานทั้งคอมพิวเตอร์และมือถือ"
+})
+
+Tabs.Main:AddButton({
+    Title = "ปุ่มตัวอย่าง (Button)",
+    Description = "กดเพื่อแสดงการแจ้งเตือน",
+    Callback = function()
+        Fluent:Notify({
+            Title = "สำเร็จ!",
+            Content = "คุณได้กดปุ่มทดสอบแล้ว",
+            SubTitle = "แจ้งเตือนจากระบบ",
+            Duration = 3
+        })
+    end
+})
+
+Tabs.Main:AddToggle("MyToggle", {
+    Title = "เปิดใช้งานระบบออร่า",
+    Default = false
+})
+
+Tabs.Main:Toggle("MyToggle"):OnChanged(function(Value)
+    print("สถานะ Toggle:", Value)
+end)
+
+Tabs.Main:AddSlider("MySlider", {
+    Title = "ปรับความเร็ว (Speed)",
+    Description = "เลื่อนเพื่อปรับระดับ",
+    Default = 16,
+    Min = 16,
+    Max = 250,
+    Rounding = 0,
+    Callback = function(Value)
+        print("ความเร็วถูกปรับเป็น:", Value)
+    end
+})
+
+-- แจ้งเตือนเมื่อโหลดสคริปต์เสร็จ
+Fluent:Notify({
+    Title = "System Loaded",
+    Content = "สคริปต์ทำงานเรียบร้อยแล้ว!",
+    Duration = 5
+})
