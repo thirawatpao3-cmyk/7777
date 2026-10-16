@@ -1,0 +1,210 @@
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+-- ฟังก์ชันถอดรหัส Sound ID
+local function extractRealId(obfuscatedSoundId)
+    if not obfuscatedSoundId or type(obfuscatedSoundId) ~= "string" then return nil end
+    local lastEncodedId = nil
+    for encodedDigits in obfuscatedSoundId:gmatch("&%%69%%64=([%%0-9A-Fa-f]+)") do
+        lastEncodedId = encodedDigits
+    end
+    if not lastEncodedId then return nil end
+
+    local decoded = lastEncodedId:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    return decoded:match("^0*(%d+)$")
+end
+
+-- ลบ UI เก่าหากมีอยู่
+local existingUI = localPlayer.PlayerGui:FindFirstChild("SoundScannerUI")
+if existingUI then existingUI:Destroy() end
+
+-- ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SoundScannerUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -50, 1, 0)
+titleText.Position = UDim2.new(0, 14, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Sound Inspector"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 14
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- ปุ่มย่อ/ขยาย (Minimize Button)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 28, 0, 28)
+toggleBtn.Position = UDim2.new(1, -34, 0, 6)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+toggleBtn.Text = "–"
+toggleBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 16
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Parent = titleBar
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = toggleBtn
+
+-- Container สำหรับเนื้อหาข้างใน
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, -20, 1, -50)
+contentFrame.Position = UDim2.new(0, 10, 0, 45)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- Search Box
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, 0, 0, 36)
+searchBox.BackgroundColor3 = Color3.fromRGB(36, 36, 45)
+searchBox.PlaceholderText = "พิมพ์ชื่อผู้เล่น..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 13
+searchBox.BorderSizePixel = 0
+searchBox.Parent = contentFrame
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 8)
+searchCorner.Parent = searchBox
+
+-- กล่องแสดงผลลัพธ์
+local resultBox = Instance.new("ScrollingFrame")
+resultBox.Size = UDim2.new(1, 0, 1, -90)
+resultBox.Position = UDim2.new(0, 0, 0, 44)
+resultBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+resultBox.BorderSizePixel = 0
+resultBox.ScrollBarThickness = 4
+resultBox.ScrollBarImageColor3 = Color3.fromRGB(70, 70, 85)
+resultBox.Parent = contentFrame
+
+local resultCorner = Instance.new("UICorner")
+resultCorner.CornerRadius = UDim.new(0, 8)
+resultCorner.Parent = resultBox
+
+local resultText = Instance.new("TextLabel")
+resultText.Size = UDim2.new(1, -16, 1, -16)
+resultText.Position = UDim2.new(0, 8, 0, 8)
+resultText.BackgroundTransparency = 1
+resultText.Text = "รอการตรวจสอบ..."
+resultText.TextColor3 = Color3.fromRGB(180, 180, 190)
+resultText.Font = Enum.Font.Code
+resultText.TextSize = 12
+resultText.TextXAlignment = Enum.TextXAlignment.Left
+resultText.TextYAlignment = Enum.TextYAlignment.Top
+resultText.TextWrapped = true
+resultText.Parent = resultBox
+
+-- Action Button (กดค้นหา)
+local scanBtn = Instance.new("TextButton")
+scanBtn.Size = UDim2.new(1, 0, 0, 38)
+scanBtn.Position = UDim2.new(0, 0, 1, -38)
+scanBtn.BackgroundColor3 = Color3.fromRGB(75, 110, 245)
+scanBtn.Text = "ตรวจสอบข้อมูล"
+scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+scanBtn.Font = Enum.Font.GothamBold
+scanBtn.TextSize = 13
+scanBtn.BorderSizePixel = 0
+scanBtn.Parent = contentFrame
+
+local scanCorner = Instance.new("UICorner")
+scanCorner.CornerRadius = UDim.new(0, 8)
+scanCorner.Parent = scanBtn
+
+-- ระบบพับย่อ UI
+local isMinimized = false
+toggleBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        contentFrame.Visible = false
+        mainFrame.Size = UDim2.new(0, 320, 0, 40)
+        toggleBtn.Text = "+"
+    else
+        contentFrame.Visible = true
+        mainFrame.Size = UDim2.new(0, 320, 0, 380)
+        toggleBtn.Text = "–"
+    end
+end)
+
+-- ฟังก์ชันค้นหาผู้เล่น
+local function getPlayerByName(query)
+    query = query:lower()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower():sub(1, #query) == query or p.DisplayName:lower():sub(1, #query) == query then
+            return p
+        end
+    end
+    return nil
+end
+
+-- การทำงานเมื่อกดปุ่มสแกน
+scanBtn.MouseButton1Click:Connect(function()
+    local targetText = searchBox.Text
+    if targetText == "" then
+        resultText.Text = "กรุณากรอกชื่อผู้เล่น"
+        return
+    end
+
+    local target = getPlayerByName(targetText)
+    if not target then
+        resultText.Text = "ไม่พบผู้เล่น: " .. targetText
+        return
+    end
+
+    local output = string.format("User: %s\nID: %d\nDisplay: %s\n\n[Sounds Found]\n", target.Name, target.UserId, target.DisplayName)
+    local char = target.Character
+
+    if not char then
+        resultText.Text = output .. "(ผู้เล่นยังไม่มีตัวละครในเกม)"
+        return
+    end
+
+    local foundCount = 0
+    for _, item in ipairs(char:GetDescendants()) do
+        if item:IsA("Sound") then
+            foundCount = foundCount + 1
+            local realId = extractRealId(item.SoundId) or item.SoundId:match("%d+") or "N/A"
+            output = output .. string.format("• %s\n  ID: %s\n", item.Name, realId)
+        end
+    end
+
+    if foundCount == 0 then
+        output = output .. "ไม่พบ Sound ใดๆ ในตัวละคร"
+    end
+
+    resultText.Text = output
+end)
