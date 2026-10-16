@@ -1,0 +1,317 @@
+--[[
+    ═══════════════════════════════════════════════════════════════════════
+     LLOYD EDITION (FROSTED GLASS HUB) — PLAYER AUDIO ID EXTRACTOR MODULE
+    - Integrated with extractRealId parser
+    - Player Selection Dropdown & Auto Refresh
+    - Dynamic Island & Minimize / Floating Toggle Support
+    ═══════════════════════════════════════════════════════════════════════
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ====================================================================
+-- ฟังก์ชันถอดรหัส Sound ID ที่เข้ารหัส
+-- ====================================================================
+local function extractRealId(obfuscatedSoundId)
+    if not obfuscatedSoundId or obfuscatedSoundId == "" then return nil end
+    local lastEncodedId = nil
+    for encodedDigits in obfuscatedSoundId:gmatch("&%%69%%64=([%%0-9A-Fa-f]+)") do
+        lastEncodedId = encodedDigits
+    end
+    if not lastEncodedId then 
+        -- กรณีเป็นตัวเลขธรรมดา ให้ดึงตัวเลขออกมาโดยตรง
+        return obfuscatedSoundId:match("%d+") 
+    end
+
+    local decoded = lastEncodedId:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    return decoded:match("^0*(%d+)$")
+end
+
+-- ====================================================================
+-- ฟังก์ชันดึง Sound ID จากตัวละครของผู้เล่นเป้าหมาย
+-- ====================================================================
+local function getPlayerSoundId(targetPlayer)
+    if not targetPlayer then return nil end
+    
+    local char = targetPlayer.Character
+    if char then
+        for _, desc in ipairs(char:GetDescendants()) do
+            if desc:IsA("Sound") and desc.SoundId ~= "" then
+                return desc.SoundId
+            end
+        end
+    end
+    
+    local bp = targetPlayer:FindFirstChildOfClass("Backpack")
+    if bp then
+        for _, desc in ipairs(bp:GetDescendants()) do
+            if desc:IsA("Sound") and desc.SoundId ~= "" then
+                return desc.SoundId
+            end
+        end
+    end
+    return nil
+end
+
+-- ====================================================================
+-- สร้างหน้าต่าง GUI (ในสไตล์ Lloyd Frosted Glass)
+-- ====================================================================
+local gethui = gethui or function() return game:GetService("CoreGui") end
+local GuiParent = (function()
+    local ok, res = pcall(gethui)
+    if ok and res then return res end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end)()
+
+if GuiParent:FindFirstChild("Lloyd_ExtractorRoot") then
+    GuiParent:FindFirstChild("Lloyd_ExtractorRoot"):Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Lloyd_ExtractorRoot"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = GuiParent
+
+-- 1. ปุ่มลอยเปิด/ย่อ UI (Floating Toggle Button)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleUI_Floating"
+ToggleButton.Size = UDim2.fromOffset(115, 36)
+ToggleButton.Position = UDim2.new(0, 25, 0.5, -18)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(16, 20, 28)
+ToggleButton.BackgroundTransparency = 0.2
+ToggleButton.Text = "⚡ เปิด/ย่อ UI"
+ToggleButton.TextColor3 = Color3.fromRGB(195, 255, 30)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 13
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Parent = ScreenGui
+
+local tbCorner = Instance.new("UICorner", ToggleButton)
+tbCorner.CornerRadius = UDim.new(0, 10)
+
+local tbStroke = Instance.new("UIStroke", ToggleButton)
+tbStroke.Color = Color3.fromRGB(195, 255, 30)
+tbStroke.Transparency = 0.4
+tbStroke.Thickness = 1.2
+
+-- 2. หน้าต่างหลัก (Main Window Frame)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainExtractorWindow"
+MainFrame.Size = UDim2.fromOffset(360, 310)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -155)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
+MainFrame.BackgroundTransparency = 0.15
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = false
+MainFrame.Parent = ScreenGui
+
+local mfCorner = Instance.new("UICorner", MainFrame)
+mfCorner.CornerRadius = UDim.new(0, 18)
+
+local mfStroke = Instance.new("UIStroke", MainFrame)
+mfStroke.Color = Color3.fromRGB(255, 255, 255)
+mfStroke.Transparency = 0.35
+mfStroke.Thickness = 1.4
+
+-- แถบหัวข้อด้านบน (Title Bar)
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 48)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -90, 1, 0)
+TitleLabel.Position = UDim2.new(0, 16, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "ID EXTRACTOR HUB"
+TitleLabel.TextSize = 14
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- ปุ่มย่อหน้าต่าง (-)
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.fromOffset(28, 28)
+MinBtn.Position = UDim2.new(1, -38, 0.5, -14)
+MinBtn.BackgroundColor3 = Color3.fromRGB(30, 36, 50)
+MinBtn.BackgroundTransparency = 0.3
+MinBtn.Text = "—"
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextSize = 14
+MinBtn.TextColor3 = Color3.fromRGB(200, 210, 228)
+MinBtn.BorderSizePixel = 0
+MinBtn.Parent = TitleBar
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 8)
+
+-- 3. ตัวเลือกระบุผู้เล่น (Player Selection Dropdown)
+local selectedTargetPlayer = nil
+
+local DropdownBtn = Instance.new("TextButton")
+DropdownBtn.Size = UDim2.new(1, -32, 0, 40)
+DropdownBtn.Position = UDim2.new(0, 16, 0, 56)
+DropdownBtn.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
+DropdownBtn.BackgroundTransparency = 0.3
+DropdownBtn.Text = "  เลือกผู้เล่น: (คลิกเพื่อเลือก)"
+DropdownBtn.Font = Enum.Font.GothamMedium
+DropdownBtn.TextSize = 12.5
+DropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownBtn.TextXAlignment = Enum.TextXAlignment.Left
+DropdownBtn.BorderSizePixel = 0
+DropdownBtn.Parent = MainFrame
+Instance.new("UICorner", DropdownBtn).CornerRadius = UDim.new(0, 10)
+
+local ArrowLabel = Instance.new("TextLabel")
+ArrowLabel.Size = UDim2.fromOffset(20, 20)
+ArrowLabel.Position = UDim2.new(1, -28, 0.5, -10)
+ArrowLabel.BackgroundTransparency = 1
+ArrowLabel.Font = Enum.Font.GothamBold
+ArrowLabel.Text = "▼"
+ArrowLabel.TextSize = 10
+ArrowLabel.TextColor3 = Color3.fromRGB(165, 178, 202)
+ArrowLabel.Parent = DropdownBtn
+
+-- รายการผู้เล่น (Scrolling Dropdown List)
+local DropdownList = Instance.new("ScrollingFrame")
+DropdownList.Size = UDim2.new(1, -32, 0, 110)
+DropdownList.Position = UDim2.new(0, 16, 0, 100)
+DropdownList.BackgroundColor3 = Color3.fromRGB(16, 18, 26)
+DropdownList.BorderSizePixel = 0
+DropdownList.ScrollBarThickness = 3
+DropdownList.ScrollBarImageColor3 = Color3.fromRGB(195, 255, 30)
+DropdownList.Visible = false
+DropdownList.ZIndex = 20
+DropdownList.Parent = MainFrame
+Instance.new("UICorner", DropdownList).CornerRadius = UDim.new(0, 10)
+
+local ListLayout = Instance.new("UIListLayout", DropdownList)
+ListLayout.Padding = UDim.new(0, 3)
+
+local function refreshPlayerList()
+    for _, item in ipairs(DropdownList:GetChildren()) do
+        if item:IsA("TextButton") then item:Destroy() end
+    end
+
+    local plrs = Players:GetPlayers()
+    for _, plr in ipairs(plrs) do
+        local pBtn = Instance.new("TextButton")
+        pBtn.Size = UDim2.new(1, 0, 0, 28)
+        pBtn.BackgroundColor3 = Color3.fromRGB(26, 30, 42)
+        pBtn.BackgroundTransparency = 0.4
+        pBtn.Font = Enum.Font.Gotham
+        pBtn.TextSize = 11.5
+        pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        pBtn.Text = " " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
+        pBtn.TextXAlignment = Enum.TextXAlignment.Left
+        pBtn.ZIndex = 21
+        pBtn.BorderSizePixel = 0
+        pBtn.Parent = DropdownList
+        Instance.new("UICorner", pBtn).CornerRadius = UDim.new(0, 6)
+
+        pBtn.MouseButton1Click:Connect(function()
+            selectedTargetPlayer = plr
+            DropdownBtn.Text = "  เลือก: " .. plr.DisplayName
+            DropdownList.Visible = false
+        end)
+    end
+    DropdownList.CanvasSize = UDim2.new(0, 0, 0, #plrs * 31)
+end
+
+DropdownBtn.MouseButton1Click:Connect(function()
+    DropdownList.Visible = not DropdownList.Visible
+    if DropdownList.Visible then refreshPlayerList() end
+end)
+
+-- 4. ปุ่มดึง ID (Fetch / Extract ID Button)
+local ExtractBtn = Instance.new("TextButton")
+ExtractBtn.Size = UDim2.new(1, -32, 0, 40)
+ExtractBtn.Position = UDim2.new(0, 16, 0, 108)
+ExtractBtn.BackgroundColor3 = Color3.fromRGB(195, 255, 30)
+ExtractBtn.Text = "ดึงและถอดรหัส ID"
+ExtractBtn.Font = Enum.Font.GothamBold
+ExtractBtn.TextSize = 13
+ExtractBtn.TextColor3 = Color3.fromRGB(12, 14, 20)
+ExtractBtn.BorderSizePixel = 0
+ExtractBtn.Parent = MainFrame
+Instance.new("UICorner", ExtractBtn).CornerRadius = UDim.new(0, 10)
+
+-- 5. ช่องแสดงผล ID (Result Display Box)
+local ResultBox = Instance.new("TextBox")
+ResultBox.Size = UDim2.new(1, -32, 0, 44)
+ResultBox.Position = UDim2.new(0, 16, 0, 160)
+ResultBox.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+ResultBox.TextColor3 = Color3.fromRGB(195, 255, 30)
+ResultBox.Font = Enum.Font.Code
+ResultBox.TextSize = 14
+ResultBox.PlaceholderText = "รหัส ID จะปรากฏที่นี่..."
+ResultBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 130)
+ResultBox.ClearTextOnFocus = false
+ResultBox.TextEditable = false
+ResultBox.BorderSizePixel = 0
+ResultBox.Parent = MainFrame
+Instance.new("UICorner", ResultBox).CornerRadius = UDim.new(0, 10)
+
+local StatusHint = Instance.new("TextLabel")
+StatusHint.Size = UDim2.new(1, -32, 0, 20)
+StatusHint.Position = UDim2.new(0, 16, 0, 212)
+StatusHint.BackgroundTransparency = 1
+StatusHint.Font = Enum.Font.Gotham
+StatusHint.TextSize = 11
+StatusHint.TextColor3 = Color3.fromRGB(140, 150, 170)
+StatusHint.Text = "พร้อมทำงาน • กดปุ่มเพื่อดึง ID เพลงจากตัวละคร"
+StatusHint.Parent = MainFrame
+
+-- ====================================================================
+-- ฟังก์ชันการทำงานของปุ่ม
+-- ====================================================================
+
+-- การสลับเปิด/ย่อหน้าต่าง
+local function toggleWindow()
+    MainFrame.Visible = not MainFrame.Visible
+end
+MinBtn.MouseButton1Click:Connect(toggleWindow)
+ToggleButton.MouseButton1Click:Connect(toggleWindow)
+
+-- ประมวลผลดึง ID
+ExtractBtn.MouseButton1Click:Connect(function()
+    if not selectedTargetPlayer then
+        StatusHint.Text = "กรุณาเลือกผู้เล่นจากรายการก่อน!"
+        StatusHint.TextColor3 = Color3.fromRGB(244, 67, 54)
+        return
+    end
+
+    local rawSoundId = getPlayerSoundId(selectedTargetPlayer)
+    
+    if rawSoundId then
+        local realId = extractRealId(rawSoundId)
+        if realId then
+            ResultBox.Text = tostring(realId)
+            StatusHint.Text = "ดึง ID สำเร็จและคัดลอกลงคลิปบอร์ดแล้ว!"
+            StatusHint.TextColor3 = Color3.fromRGB(46, 204, 113)
+
+            -- คัดลอกลง Clipboard อัตโนมัติ (หาก Executor รองรับ)
+            if setclipboard then
+                pcall(function() setclipboard(tostring(realId)) end)
+            end
+        else
+            ResultBox.Text = tostring(rawSoundId)
+            StatusHint.Text = "พบเสียง แต่ไม่ตรงรูปแบบเข้ารหัส (แสดงค่าดิบ)"
+            StatusHint.TextColor3 = Color3.fromRGB(245, 158, 11)
+        end
+    else
+        -- หากผู้เล่นไม่ได้เปิดเพลง จะแสดง User ID ของตัวละครแทน
+        local userId = tostring(selectedTargetPlayer.UserId)
+        ResultBox.Text = userId
+        StatusHint.Text = "ไม่พบเพลงที่กำลังเปิด (แสดง User ID ของผู้เล่นแทน)"
+        StatusHint.TextColor3 = Color3.fromRGB(140, 150, 170)
+        if setclipboard then
+            pcall(function() setclipboard(userId) end)
+        end
+    end
+end)
