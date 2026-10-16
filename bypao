@@ -1,0 +1,255 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- สร้าง ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SoundIdDecoderHub"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- กรอบหลัก (Main Frame)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 420, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -180)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 14)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(60, 60, 75)
+stroke.Thickness = 1.5
+stroke.Parent = mainFrame
+
+-- แถบหัวข้อด้านบน (Top Bar)
+local topBar = Instance.new("Frame")
+topBar.Name = "TopBar"
+topBar.Size = UDim2.new(1, 0, 0, 45)
+topBar.BackgroundTransparency = 1
+topBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -60, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎵 Sound Decoder Hub"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 15
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = topBar
+
+-- ปุ่มย่อ/ขยายหน้าต่าง (Minimize Button)
+local minBtn = Instance.new("TextButton")
+minBtn.Name = "MinBtn"
+minBtn.Size = UDim2.new(0, 30, 0, 30)
+minBtn.Position = UDim2.new(1, -40, 0, 7)
+minBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+minBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+minBtn.Text = "−"
+minBtn.TextSize = 18
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Parent = topBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 8)
+minCorner.Parent = minBtn
+
+-- คอนเทนเนอร์เนื้อหาด้านใน (Content Container สำหรับซ่อนเวลาย่อ)
+local contentContainer = Instance.new("Frame")
+contentContainer.Name = "ContentContainer"
+contentContainer.Size = UDim2.new(1, 0, 1, -45)
+contentContainer.Position = UDim2.new(0, 0, 0, 45)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = mainFrame
+
+-- รายการผู้เล่น (ScrollingFrame)
+local playerListFrame = Instance.new("ScrollingFrame")
+playerListFrame.Name = "PlayerList"
+playerListFrame.Size = UDim2.new(1, -30, 0, 150)
+playerListFrame.Position = UDim2.new(0, 15, 0, 5)
+playerListFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+playerListFrame.BorderSizePixel = 0
+playerListFrame.ScrollBarThickness = 5
+playerListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+playerListFrame.Parent = contentContainer
+
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 8)
+listCorner.Parent = playerListFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 6)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = playerListFrame
+
+local listPadding = Instance.new("UIPadding")
+listPadding.PaddingTop = UDim.new(0, 6)
+listPadding.PaddingLeft = UDim.new(0, 6)
+listPadding.PaddingRight = UDim.new(0, 6)
+listPadding.Parent = playerListFrame
+
+-- ปุ่มเปิด/ปิด อัปเดตอัตโนมัติ
+local autoToggleBtn = Instance.new("TextButton")
+autoToggleBtn.Size = UDim2.new(1, -30, 0, 36)
+autoToggleBtn.Position = UDim2.new(0, 15, 0, 163)
+autoToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
+autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoToggleBtn.Text = "🟢 อัปเดตรายชื่อตลอดเวลา: เปิดอยู่"
+autoToggleBtn.TextSize = 13
+autoToggleBtn.Font = Enum.Font.GothamBold
+autoToggleBtn.Parent = contentContainer
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = autoToggleBtn
+
+-- กล่องข้อความแสดงผลลัพธ์
+local resultLabel = Instance.new("TextLabel")
+resultLabel.Size = UDim2.new(1, -30, 0, 85)
+resultLabel.Position = UDim2.new(0, 15, 0, 207)
+resultLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+resultLabel.TextColor3 = Color3.fromRGB(140, 220, 160)
+resultLabel.Text = "เลือกผู้เล่นที่เปิดเพลงด้านบน..."
+resultLabel.TextSize = 12
+resultLabel.Font = Enum.Font.GothamMedium
+resultLabel.TextWrapped = true
+resultLabel.Parent = contentContainer
+
+local resCorner = Instance.new("UICorner")
+resCorner.CornerRadius = UDim.new(0, 8)
+resCorner.Parent = resultLabel
+
+-- กลไกย่อ / ขยายหน้าต่าง (Minimize Logic)
+local isMinimized = false
+local fullSize = UDim2.new(0, 420, 0, 360)
+local minSize = UDim2.new(0, 420, 0, 45)
+
+minBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    
+    if isMinimized then
+        contentContainer.Visible = false
+        minBtn.Text = "+"
+        TweenService:Create(mainFrame, tweenInfo, {Size = minSize}):Play()
+    else
+        minBtn.Text = "−"
+        local tween = TweenService:Create(mainFrame, tweenInfo, {Size = fullSize})
+        tween:Play()
+        tween.Completed:Connect(function()
+            if not isMinimized then
+                contentContainer.Visible = true
+            end
+        end)
+    end
+end)
+
+-- ฟังก์ชันถอดรหัส Sound ID
+local function extractSoundId(text)
+    local lastId = nil
+    for encodedDigits in text:gmatch("&%%%%69%%%%64=([%%%%0-9A-Fa-f]+)") do
+        local decoded = encodedDigits:gsub("%%3(%d)", "%1")
+        decoded = decoded:gsub("^0+", "")
+        if decoded == "" then
+            decoded = "0"
+        end
+        lastId = decoded
+    end
+    return lastId
+end
+
+-- ฟังก์ชันตรวจจับเสียงที่กำลังเล่น
+local function getPlayingSounds(plr)
+    local sounds = {}
+    if plr.Character then
+        for _, obj in ipairs(plr.Character:GetDescendants()) do
+            if obj:IsA("Sound") and (obj.IsPlaying or obj.TimePosition > 0) then
+                table.insert(sounds, obj)
+            end
+        end
+    end
+    return sounds
+end
+
+-- อัปเดตรายชื่อผู้เล่น
+local function updatePlayerList()
+    for _, child in ipairs(playerListFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local count = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local sounds = getPlayingSounds(plr)
+        if #sounds > 0 then
+            count = count + 1
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 32)
+            btn.BackgroundColor3 = Color3.fromRGB(38, 42, 54)
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Text = "🔊 " .. plr.DisplayName .. " (@" .. plr.Name .. ")"
+            btn.TextSize = 12
+            btn.Font = Enum.Font.Gotham
+            btn.Parent = playerListFrame
+
+            local bCorner = Instance.new("UICorner")
+            bCorner.CornerRadius = UDim.new(0, 6)
+            bCorner.Parent = btn
+
+            btn.MouseButton1Click:Connect(function()
+                local rawSound = sounds[1]
+                local rawId = rawSound and rawSound.SoundId or ""
+                local decodedId = extractSoundId(rawId)
+
+                if decodedId then
+                    resultLabel.Text = "ผู้เล่น: " .. plr.Name .. "\nSound ID (ถอดรหัส): " .. decodedId
+                    resultLabel.TextColor3 = Color3.fromRGB(140, 220, 160)
+                    if pcall(function() return setclipboard end) and setclipboard then
+                        setclipboard(decodedId)
+                        resultLabel.Text = resultLabel.Text .. " (คัดลอกลงคลิปบอร์ดแล้ว!)"
+                    end
+                else
+                    resultLabel.Text = "ผู้เล่น: " .. plr.Name .. "\nRaw ID: " .. rawId .. "\n(ไม่พบรหัสที่เข้ารหัสไว้)"
+                    resultLabel.TextColor3 = Color3.fromRGB(240, 140, 140)
+                end
+            end)
+        end
+    end
+
+    if count == 0 and resultLabel.Text:find("Sound ID") == nil then
+        resultLabel.Text = "กำลังรอผู้เล่นเปิดเพลง..."
+        resultLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+    end
+end
+
+-- สลับการทำงาน Auto-Update
+local isAutoUpdating = true
+autoToggleBtn.MouseButton1Click:Connect(function()
+    isAutoUpdating = not isAutoUpdating
+    if isAutoUpdating then
+        autoToggleBtn.Text = "🟢 อัปเดตรายชื่อตลอดเวลา: เปิดอยู่"
+        autoToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
+    else
+        autoToggleBtn.Text = "🔴 อัปเดตรายชื่อตลอดเวลา: ปิดอยู่"
+        autoToggleBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
+    end
+end)
+
+-- ลูปอัปเดตอัตโนมัติ
+task.spawn(function()
+    while true do
+        if isAutoUpdating then
+            updatePlayerList()
+        end
+        task.wait(1)
+    end
+end)
