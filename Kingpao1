@@ -1,0 +1,507 @@
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+-- ฟังก์ชันคัดลอกข้อความลง Clipboard (รองรับ Executor หลากหลายรูปแบบ)
+local function copyToClipboard(text)
+    local fn = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+    if fn then
+        fn(tostring(text))
+        return true
+    end
+    return false
+end
+
+-- ฟังก์ชันถอดรหัส Sound ID และตัดเลข 3 ด้านหน้าออก
+local function extractRealId(obfuscatedSoundId)
+    if not obfuscatedSoundId or type(obfuscatedSoundId) ~= "string" then return nil end
+    local lastEncodedId = nil
+    for encodedDigits in obfuscatedSoundId:gmatch("&%%69%%64=([%%0-9A-Fa-f]+)") do
+        lastEncodedId = encodedDigits
+    end
+    if not lastEncodedId then return nil end
+
+    local decoded = lastEncodedId:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    local rawId = decoded:match("^0*(%d+)$")
+    if rawId then
+        if rawId:sub(1, 1) == "3" then
+            rawId = rawId:sub(2)
+        end
+        return rawId
+    end
+    return nil
+end
+
+local function cleanSoundId(soundId)
+    local id = extractRealId(soundId) or soundId:match("%d+")
+    if id and id:sub(1, 1) == "3" then
+        id = id:sub(2)
+    end
+    return id
+end
+
+-- เช็คว่าผู้เล่นกำลังเปิดเสียงอยู่หรือไม่
+local function isPlayerPlayingSound(player)
+    if not player or not player.Character then return false end
+    for _, item in ipairs(player.Character:GetDescendants()) do
+        if item:IsA("Sound") and item.IsPlaying then
+            return true
+        end
+    end
+    return false
+end
+
+-- ลบ UI เก่า
+local existingUI = localPlayer.PlayerGui:FindFirstChild("HonkukiAudioLoggerUI")
+if existingUI then existingUI:Destroy() end
+
+-- สร้าง ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HonkukiAudioLoggerUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-----------------------------------------------------------
+-- 1. ปุ่มลอย ID Menu ด้านซ้าย
+-----------------------------------------------------------
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.new(0, 95, 0, 32)
+floatBtn.Position = UDim2.new(0.04, 0, 0.22, 0)
+floatBtn.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
+floatBtn.Text = "🆔 ID Menu"
+floatBtn.TextColor3 = Color3.fromRGB(240, 240, 255)
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextSize = 13
+floatBtn.Active = true
+floatBtn.Draggable = true
+floatBtn.Parent = screenGui
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(0, 8)
+floatCorner.Parent = floatBtn
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = Color3.fromRGB(150, 45, 235)
+floatStroke.Thickness = 1.5
+floatStroke.Parent = floatBtn
+
+-----------------------------------------------------------
+-- 2. หน้าต่างหลัก
+-----------------------------------------------------------
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 520, 0, 290)
+mainFrame.Position = UDim2.new(0.5, -260, 0.5, -145)
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 8, 14)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(155, 35, 245)
+mainStroke.Thickness = 2.5
+mainStroke.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 42)
+titleBar.BackgroundTransparency = 1
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(0, 280, 1, 0)
+titleText.Position = UDim2.new(0, 16, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "HONKUKI AUDIO LOGGER"
+titleText.TextColor3 = Color3.fromRGB(225, 185, 255)
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 14
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- ปุ่ม TAG ON
+local tagBtn = Instance.new("TextButton")
+tagBtn.Size = UDim2.new(0, 75, 0, 26)
+tagBtn.Position = UDim2.new(1, -120, 0, 8)
+tagBtn.BackgroundColor3 = Color3.fromRGB(90, 25, 145)
+tagBtn.Text = "TAG ON"
+tagBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tagBtn.Font = Enum.Font.GothamBold
+tagBtn.TextSize = 11
+tagBtn.BorderSizePixel = 0
+tagBtn.Parent = titleBar
+
+local tagCorner = Instance.new("UICorner")
+tagCorner.CornerRadius = UDim.new(0, 13)
+tagCorner.Parent = tagBtn
+
+-- ปุ่มปิด (X)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 26)
+closeBtn.Position = UDim2.new(1, -38, 0, 8)
+closeBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 130)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 12
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+-- เส้นแบ่งด้านบน
+local topDivider = Instance.new("Frame")
+topDivider.Size = UDim2.new(1, -20, 0, 1)
+topDivider.Position = UDim2.new(0, 10, 0, 42)
+topDivider.BackgroundColor3 = Color3.fromRGB(155, 35, 245)
+topDivider.BorderSizePixel = 0
+topDivider.Parent = mainFrame
+
+-----------------------------------------------------------
+-- 3. พื้นที่เนื้อหา ซ้าย (Players) และ ขวา (Actions)
+-----------------------------------------------------------
+local playersLabel = Instance.new("TextLabel")
+playersLabel.Size = UDim2.new(0, 100, 0, 16)
+playersLabel.Position = UDim2.new(0, 14, 0, 48)
+playersLabel.BackgroundTransparency = 1
+playersLabel.Text = "PLAYERS"
+playersLabel.TextColor3 = Color3.fromRGB(195, 150, 245)
+playersLabel.Font = Enum.Font.GothamBold
+playersLabel.TextSize = 12
+playersLabel.TextXAlignment = Enum.TextXAlignment.Left
+playersLabel.Parent = mainFrame
+
+local playersScroll = Instance.new("ScrollingFrame")
+playersScroll.Size = UDim2.new(0, 240, 0, 185)
+playersScroll.Position = UDim2.new(0, 14, 0, 68)
+playersScroll.BackgroundColor3 = Color3.fromRGB(14, 12, 18)
+playersScroll.BorderSizePixel = 0
+playersScroll.ScrollBarThickness = 3
+playersScroll.ScrollBarImageColor3 = Color3.fromRGB(155, 35, 245)
+playersScroll.Parent = mainFrame
+
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 8)
+listCorner.Parent = playersScroll
+
+local listStroke = Instance.new("UIStroke")
+listStroke.Color = Color3.fromRGB(75, 45, 105)
+listStroke.Thickness = 1
+listStroke.Parent = playersScroll
+
+local playerLayout = Instance.new("UIListLayout")
+playerLayout.Padding = UDim.new(0, 4)
+playerLayout.Parent = playersScroll
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -28, 0, 20)
+statusLabel.Position = UDim2.new(0, 14, 1, -26)
+statusLabel.BackgroundColor3 = Color3.fromRGB(15, 12, 22)
+statusLabel.Text = "เลือกชื่อผู้เล่นจากรายการด้านซ้าย"
+statusLabel.TextColor3 = Color3.fromRGB(175, 140, 230)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 11
+statusLabel.BorderSizePixel = 0
+statusLabel.Parent = mainFrame
+
+local statusCorner = Instance.new("UICorner")
+statusCorner.CornerRadius = UDim.new(0, 6)
+statusCorner.Parent = statusLabel
+
+-- ฝั่งขวา: เมนูปุ่มฟังก์ชัน
+local rightPanel = Instance.new("Frame")
+rightPanel.Size = UDim2.new(0, 240, 0, 185)
+rightPanel.Position = UDim2.new(1, -254, 0, 68)
+rightPanel.BackgroundTransparency = 1
+rightPanel.Parent = mainFrame
+
+local function createMenuButton(text, posIndex)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.Position = UDim2.new(0, 0, 0, (posIndex - 1) * 38)
+    btn.BackgroundColor3 = Color3.fromRGB(24, 16, 36)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(225, 200, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.BorderSizePixel = 0
+    btn.Parent = rightPanel
+
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 8)
+    bCorner.Parent = btn
+
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = Color3.fromRGB(60, 35, 90)
+    bStroke.Thickness = 1
+    bStroke.Parent = btn
+
+    return btn
+end
+
+local btnHackSound = createMenuButton("เจาะไอดีเพลง", 1)
+local btnPlayFollow = createMenuButton("ยิงเปิดเพลงตาม player", 2)
+local btnMuteListen = createMenuButton("ฟังเพลงส่วนตัว 80%", 3)
+local btnPlayerInfo = createMenuButton("ดูข้อมูล player", 4)
+local btnViewIds    = createMenuButton("ดู ID ที่เจาะมา", 5)
+
+-----------------------------------------------------------
+-- 4. หน้าต่างย่อย: แสดงผลเฉพาะตัวเลข Sound ID + ปุ่มคัดลอก
+-----------------------------------------------------------
+local idViewerFrame = Instance.new("Frame")
+idViewerFrame.Size = UDim2.new(0, 290, 0, 250)
+idViewerFrame.Position = UDim2.new(0.5, -145, 0.5, -125)
+idViewerFrame.BackgroundColor3 = Color3.fromRGB(12, 10, 16)
+idViewerFrame.BorderSizePixel = 0
+idViewerFrame.Visible = false
+idViewerFrame.Active = true
+idViewerFrame.Draggable = true
+idViewerFrame.ZIndex = 10
+idViewerFrame.Parent = screenGui
+
+local idViewCorner = Instance.new("UICorner")
+idViewCorner.CornerRadius = UDim.new(0, 10)
+idViewCorner.Parent = idViewerFrame
+
+local idViewStroke = Instance.new("UIStroke")
+idViewStroke.Color = Color3.fromRGB(180, 50, 255)
+idViewStroke.Thickness = 2
+idViewStroke.Parent = idViewerFrame
+
+local idTitle = Instance.new("TextLabel")
+idTitle.Size = UDim2.new(1, -40, 0, 30)
+idTitle.Position = UDim2.new(0, 12, 0, 4)
+idTitle.BackgroundTransparency = 1
+idTitle.Text = "Extracted Sound IDs"
+idTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+idTitle.Font = Enum.Font.GothamBold
+idTitle.TextSize = 13
+idTitle.TextXAlignment = Enum.TextXAlignment.Left
+idTitle.ZIndex = 11
+idTitle.Parent = idViewerFrame
+
+local idCloseBtn = Instance.new("TextButton")
+idCloseBtn.Size = UDim2.new(0, 24, 0, 24)
+idCloseBtn.Position = UDim2.new(1, -30, 0, 6)
+idCloseBtn.BackgroundColor3 = Color3.fromRGB(70, 20, 50)
+idCloseBtn.Text = "✕"
+idCloseBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+idCloseBtn.Font = Enum.Font.GothamBold
+idCloseBtn.TextSize = 12
+idCloseBtn.ZIndex = 11
+idCloseBtn.BorderSizePixel = 0
+idCloseBtn.Parent = idViewerFrame
+
+local idCloseCorner = Instance.new("UICorner")
+idCloseCorner.CornerRadius = UDim.new(0, 5)
+idCloseCorner.Parent = idCloseBtn
+
+-- กรอบเลื่อนแสดงรายการ ID
+local idScroll = Instance.new("ScrollingFrame")
+idScroll.Size = UDim2.new(1, -20, 0, 155)
+idScroll.Position = UDim2.new(0, 10, 0, 38)
+idScroll.BackgroundColor3 = Color3.fromRGB(18, 14, 26)
+idScroll.BorderSizePixel = 0
+idScroll.ScrollBarThickness = 3
+idScroll.ZIndex = 11
+idScroll.Parent = idViewerFrame
+
+local idScrollCorner = Instance.new("UICorner")
+idScrollCorner.CornerRadius = UDim.new(0, 6)
+idScrollCorner.Parent = idScroll
+
+local idDisplayLabel = Instance.new("TextLabel")
+idDisplayLabel.Size = UDim2.new(1, -12, 1, -12)
+idDisplayLabel.Position = UDim2.new(0, 6, 0, 6)
+idDisplayLabel.BackgroundTransparency = 1
+idDisplayLabel.Text = "ยังไม่มีข้อมูล ID"
+idDisplayLabel.TextColor3 = Color3.fromRGB(220, 190, 255)
+idDisplayLabel.Font = Enum.Font.Code
+idDisplayLabel.TextSize = 13
+idDisplayLabel.TextXAlignment = Enum.TextXAlignment.Left
+idDisplayLabel.TextYAlignment = Enum.TextYAlignment.Top
+idDisplayLabel.TextWrapped = true
+idDisplayLabel.ZIndex = 12
+idDisplayLabel.Parent = idScroll
+
+-- ปุ่มสำหรับคัดลอก ID
+local copyIdBtn = Instance.new("TextButton")
+copyIdBtn.Size = UDim2.new(1, -20, 0, 32)
+copyIdBtn.Position = UDim2.new(0, 10, 1, -40)
+copyIdBtn.BackgroundColor3 = Color3.fromRGB(110, 35, 180)
+copyIdBtn.Text = "📋 คัดลอก ID ทั้งหมด"
+copyIdBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyIdBtn.Font = Enum.Font.GothamBold
+copyIdBtn.TextSize = 12
+copyIdBtn.BorderSizePixel = 0
+copyIdBtn.ZIndex = 11
+copyIdBtn.Parent = idViewerFrame
+
+local copyBtnCorner = Instance.new("UICorner")
+copyBtnCorner.CornerRadius = UDim.new(0, 6)
+copyBtnCorner.Parent = copyIdBtn
+
+-----------------------------------------------------------
+-- 5. ระบบเลือกผู้เล่น & Logic
+-----------------------------------------------------------
+local selectedPlayer = nil
+local playerBtnItems = {}
+local currentExtractedIDs = {}
+
+local function scanPlayerSounds(player)
+    if not player then return {} end
+    local list = {}
+    local char = player.Character
+    if not char then return list end
+
+    for _, obj in ipairs(char:GetDescendants()) do
+        if obj:IsA("Sound") then
+            local finalId = cleanSoundId(obj.SoundId)
+            if finalId and finalId ~= "" then
+                table.insert(list, finalId)
+            end
+        end
+    end
+    return list
+end
+
+local function updatePlayerList()
+    for _, btn in pairs(playerBtnItems) do
+        btn:Destroy()
+    end
+    playerBtnItems = {}
+
+    local players = Players:GetPlayers()
+    for _, p in ipairs(players) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -6, 0, 28)
+        btn.BackgroundColor3 = Color3.fromRGB(20, 16, 26)
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 11
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Parent = playersScroll
+
+        local pCorner = Instance.new("UICorner")
+        pCorner.CornerRadius = UDim.new(0, 6)
+        pCorner.Parent = btn
+
+        local pPadding = Instance.new("UIPadding")
+        pPadding.PaddingLeft = UDim.new(0, 8)
+        pPadding.Parent = btn
+
+        local isPlaying = isPlayerPlayingSound(p)
+        if isPlaying then
+            btn.Text = "🔊 " .. p.DisplayName .. " (@" .. p.Name .. ")"
+            btn.TextColor3 = Color3.fromRGB(255, 70, 70)
+        else
+            btn.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+            btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+        end
+
+        btn.MouseButton1Click:Connect(function()
+            selectedPlayer = p
+            for _, b in pairs(playerBtnItems) do
+                b.BackgroundColor3 = Color3.fromRGB(20, 16, 26)
+            end
+            btn.BackgroundColor3 = Color3.fromRGB(70, 30, 100)
+            statusLabel.Text = "เลือกแล้ว: " .. p.DisplayName
+        end)
+
+        playerBtnItems[p] = btn
+    end
+    playersScroll.CanvasSize = UDim2.new(0, 0, 0, #players * 32)
+end
+
+updatePlayerList()
+
+task.spawn(function()
+    while task.wait(1) do
+        for p, btn in pairs(playerBtnItems) do
+            if p and p.Parent then
+                if isPlayerPlayingSound(p) then
+                    btn.Text = "🔊 " .. p.DisplayName .. " (@" .. p.Name .. ")"
+                    btn.TextColor3 = Color3.fromRGB(255, 70, 70)
+                else
+                    btn.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+                    btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+                end
+            end
+        end
+    end
+end)
+
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- การทำงานปุ่มเจาะเสียง
+btnHackSound.MouseButton1Click:Connect(function()
+    if not selectedPlayer then
+        statusLabel.Text = "กรุณาเลือกผู้เล่นทางด้านซ้ายก่อน!"
+        return
+    end
+
+    currentExtractedIDs = scanPlayerSounds(selectedPlayer)
+    if #currentExtractedIDs > 0 then
+        statusLabel.Text = "เจาะสำเร็จ! พบ " .. #currentExtractedIDs .. " เสียง (กด 'ดู ID ที่เจาะมา')"
+        idDisplayLabel.Text = table.concat(currentExtractedIDs, "\n")
+    else
+        statusLabel.Text = "ไม่พบ Sound ID ในตัวละครนี้"
+        idDisplayLabel.Text = "(ไม่พบ Sound)"
+    end
+end)
+
+-- การทำงานปุ่มคัดลอก ID
+copyIdBtn.MouseButton1Click:Connect(function()
+    if #currentExtractedIDs == 0 then
+        copyIdBtn.Text = "❌ ไม่มี ID ให้คัดลอก"
+        task.delay(1.5, function()
+            copyIdBtn.Text = "📋 คัดลอก ID ทั้งหมด"
+        end)
+        return
+    end
+
+    local textToCopy = table.concat(currentExtractedIDs, "\n")
+    local success = copyToClipboard(textToCopy)
+
+    if success then
+        copyIdBtn.Text = "✅ คัดลอกสำเร็จ!"
+    else
+        copyIdBtn.Text = "⚠️ Executor ไม่รองรับ Clipboard"
+    end
+
+    task.delay(1.5, function()
+        copyIdBtn.Text = "📋 คัดลอก ID ทั้งหมด"
+    end)
+end)
+
+btnViewIds.MouseButton1Click:Connect(function()
+    idViewerFrame.Visible = true
+end)
+
+btnPlayerInfo.MouseButton1Click:Connect(function()
+    if selectedPlayer then
+        statusLabel.Text = "User: " .. selectedPlayer.Name .. " | ID: " .. selectedPlayer.UserId
+    else
+        statusLabel.Text = "กรุณาเลือกผู้เล่นก่อน!"
+    end
+end)
+
+idCloseBtn.MouseButton1Click:Connect(function()
+    idViewerFrame.Visible = false
+end)
+
+floatBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
