@@ -1,0 +1,121 @@
+-- สร้าง ScreenGui
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SoundIdExtractorGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- กรอบหลัก (Main Frame)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 360, 0, 220)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -110)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 14)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(50, 50, 60)
+stroke.Thickness = 1.5
+stroke.Parent = mainFrame
+
+-- แถบหัวข้อ (Title)
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 0, 45)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎵 Sound ID Decoder"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+
+-- ช่องใส่ข้อความ (TextBox)
+local inputTextBox = Instance.new("TextBox")
+inputTextBox.Name = "InputTextBox"
+inputTextBox.Size = UDim2.new(1, -40, 0, 42)
+inputTextBox.Position = UDim2.new(0, 20, 0, 55)
+inputTextBox.BackgroundColor3 = Color3.fromRGB(34, 34, 40)
+inputTextBox.TextColor3 = Color3.fromRGB(230, 230, 230)
+inputTextBox.PlaceholderText = "วางข้อความที่เข้ารหัสไว้ที่นี่..."
+inputTextBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
+inputTextBox.Text = ""
+inputTextBox.TextSize = 13
+inputTextBox.Font = Enum.Font.Gotham
+inputTextBox.ClearTextOnFocus = false
+inputTextBox.Parent = mainFrame
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0, 8)
+inputCorner.Parent = inputTextBox
+
+-- ปุ่มแปลงข้อมูล (Button)
+local decodeButton = Instance.new("TextButton")
+decodeButton.Name = "DecodeButton"
+decodeButton.Size = UDim2.new(1, -40, 0, 40)
+decodeButton.Position = UDim2.new(0, 20, 0, 107)
+decodeButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+decodeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+decodeButton.Text = "ดึงรหัส Sound ID"
+decodeButton.TextSize = 14
+decodeButton.Font = Enum.Font.GothamSemibold
+decodeButton.Parent = mainFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = decodeButton
+
+-- ข้อความแสดงผลลัพธ์ (Result Label)
+local resultLabel = Instance.new("TextLabel")
+resultLabel.Name = "ResultLabel"
+resultLabel.Size = UDim2.new(1, -40, 0, 45)
+resultLabel.Position = UDim2.new(0, 20, 0, 157)
+resultLabel.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+resultLabel.TextColor3 = Color3.fromRGB(130, 230, 150)
+resultLabel.Text = "ผลลัพธ์: -"
+resultLabel.TextSize = 13
+resultLabel.Font = Enum.Font.GothamMedium
+resultLabel.Parent = mainFrame
+
+local resultCorner = Instance.new("UICorner")
+resultCorner.CornerRadius = UDim.new(0, 8)
+resultCorner.Parent = resultLabel
+
+-- ตรรกะการประมวลผลตามเงื่อนไขที่กำหนด
+local function extractSoundId(text)
+    local lastId = nil
+    for encodedDigits in text:gmatch("&%%%%69%%%%64=([%%%%0-9A-Fa-f]+)") do
+        local decoded = encodedDigits:gsub("%%3(%d)", "%1")
+        decoded = decoded:gsub("^0+", "")
+        if decoded == "" then
+            decoded = "0"
+        end
+        lastId = decoded
+    end
+    return lastId
+end
+
+decodeButton.MouseButton1Click:Connect(function()
+    local text = inputTextBox.Text
+    local soundId = extractSoundId(text)
+    
+    if soundId then
+        resultLabel.Text = "Sound ID: " .. soundId
+        resultLabel.TextColor3 = Color3.fromRGB(130, 230, 150)
+        -- คัดลอกลง Clipboard หากสภาพแวดล้อมรองรับ (เช่น setclipboard)
+        if pcall(function() return setclipboard end) and setclipboard then
+            setclipboard(soundId)
+            resultLabel.Text = "Sound ID: " .. soundId .. " (คัดลอกแล้ว!)"
+        end
+    else
+        resultLabel.Text = "ไม่พบ Sound ID ในข้อความนี้"
+        resultLabel.TextColor3 = Color3.fromRGB(240, 110, 110)
+    end
+end)
