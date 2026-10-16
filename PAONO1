@@ -1,0 +1,365 @@
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+-- ฟังก์ชันถอดรหัส Sound ID พร้อมตัดเลข 3 ตัวแรกออก
+local function extractRealId(obfuscatedSoundId)
+    if not obfuscatedSoundId or type(obfuscatedSoundId) ~= "string" then return nil end
+    local lastEncodedId = nil
+    for encodedDigits in obfuscatedSoundId:gmatch("&%%69%%64=([%%0-9A-Fa-f]+)") do
+        lastEncodedId = encodedDigits
+    end
+    if not lastEncodedId then return nil end
+
+    local decoded = lastEncodedId:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    local rawId = decoded:match("^0*(%d+)$")
+    
+    if rawId then
+        if rawId:sub(1, 1) == "3" then
+            rawId = rawId:sub(2)
+        end
+        return rawId
+    end
+    return nil
+end
+
+-- ฟังก์ชันดึง Sound ID ทั่วไปพร้อมตัดเลข 3 ด้านหน้า
+local function cleanSoundId(soundId)
+    local id = extractRealId(soundId) or soundId:match("%d+")
+    if id and id:sub(1, 1) == "3" then
+        id = id:sub(2)
+    end
+    return id
+end
+
+-- เช็คว่าผู้เล่นกำลังมีเสียง/เล่นเพลงอยู่หรือไม่
+local function isPlayerPlayingSound(player)
+    if not player or not player.Character then return false end
+    for _, item in ipairs(player.Character:GetDescendants()) do
+        if item:IsA("Sound") and item.IsPlaying then
+            return true
+        end
+    end
+    return false
+end
+
+-- ลบ UI เก่าหากมี
+local existingUI = localPlayer.PlayerGui:FindFirstChild("SoundInspectorUI_Wide")
+if existingUI then existingUI:Destroy() end
+
+-- สร้าง ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SoundInspectorUI_Wide"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-----------------------------------------------------------
+-- 1. ปุ่มลอยเปิด/ปิดสคริปต์ (Toggle Button)
+-----------------------------------------------------------
+local floatToggleBtn = Instance.new("TextButton")
+floatToggleBtn.Size = UDim2.new(0, 90, 0, 34)
+floatToggleBtn.Position = UDim2.new(0, 15, 0.45, 0)
+floatToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+floatToggleBtn.Text = "🆔 ID Menu"
+floatToggleBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+floatToggleBtn.Font = Enum.Font.GothamBold
+floatToggleBtn.TextSize = 12
+floatToggleBtn.Active = true
+floatToggleBtn.Draggable = true
+floatToggleBtn.Parent = screenGui
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(0, 6)
+floatCorner.Parent = floatToggleBtn
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = Color3.fromRGB(80, 80, 110)
+floatStroke.Thickness = 1.2
+floatStroke.Parent = floatToggleBtn
+
+-----------------------------------------------------------
+-- 2. หน้าต่างหลักขยายขนาด (Wide Layout)
+-----------------------------------------------------------
+-- ขนาดกว้าง 560 สูง 250 (กว้างขึ้น จุชื่อผู้เล่นได้เยอะโดยไม่ต้องเลื่อน)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 560, 0, 250)
+mainFrame.Position = UDim2.new(0.5, -280, 0.5, -125)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -70, 1, 0)
+titleText.Position = UDim2.new(0, 14, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "ID Inspector (Player Grid)"
+titleText.TextColor3 = Color3.fromRGB(240, 240, 240)
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 13
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- ปุ่มปิด (✕)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 24, 0, 24)
+closeBtn.Position = UDim2.new(1, -30, 0, 6)
+closeBtn.BackgroundColor3 = Color3.fromRGB(50, 32, 36)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 12
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 5)
+closeCorner.Parent = closeBtn
+
+-- ปุ่มย่อ (–)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+minimizeBtn.Position = UDim2.new(1, -60, 0, 6)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 48)
+minimizeBtn.Text = "–"
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 14
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = titleBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 5)
+minCorner.Parent = minimizeBtn
+
+-----------------------------------------------------------
+-- 3. พื้นที่เนื้อหา (Content Layout)
+-----------------------------------------------------------
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, -20, 1, -48)
+contentFrame.Position = UDim2.new(0, 10, 0, 42)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- === ฝั่งซ้าย: แผงปุ่มชื่อผู้เล่นทั้งหมด (Grid Panel) ===
+local leftFrame = Instance.new("Frame")
+leftFrame.Size = UDim2.new(0, 330, 1, 0)
+leftFrame.BackgroundTransparency = 1
+leftFrame.Parent = contentFrame
+
+-- กล่องใส่ปุ่มชื่อผู้เล่นเรียงกัน (Auto Grid)
+local playersGrid = Instance.new("ScrollingFrame")
+playersGrid.Size = UDim2.new(1, 0, 1, -36)
+playersGrid.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+playersGrid.BorderSizePixel = 0
+playersGrid.ScrollBarThickness = 3
+playersGrid.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 75)
+playersGrid.Parent = leftFrame
+
+local gridCorner = Instance.new("UICorner")
+gridCorner.CornerRadius = UDim.new(0, 6)
+gridCorner.Parent = playersGrid
+
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0, 100, 0, 28)
+gridLayout.CellPadding = UDim2.new(0, 5, 0, 5)
+gridLayout.Parent = playersGrid
+
+local gridPadding = Instance.new("UIPadding")
+gridPadding.PaddingTop = UDim.new(0, 5)
+gridPadding.PaddingLeft = UDim.new(0, 5)
+gridPadding.Parent = playersGrid
+
+-- ปุ่มรีเฟรชรายชื่อ
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Size = UDim2.new(1, 0, 0, 30)
+refreshBtn.Position = UDim2.new(0, 0, 1, -30)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(45, 75, 180)
+refreshBtn.Text = "🔄 รีเฟรชรายชื่อผู้เล่น"
+refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshBtn.Font = Enum.Font.GothamBold
+refreshBtn.TextSize = 12
+refreshBtn.BorderSizePixel = 0
+refreshBtn.Parent = leftFrame
+
+local refCorner = Instance.new("UICorner")
+refCorner.CornerRadius = UDim.new(0, 6)
+refCorner.Parent = refreshBtn
+
+-- === ฝั่งขวา: แสดง ID เท่านั้น ===
+local resultBox = Instance.new("ScrollingFrame")
+resultBox.Size = UDim2.new(1, -345, 1, 0)
+resultBox.Position = UDim2.new(0, 345, 0, 0)
+resultBox.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+resultBox.BorderSizePixel = 0
+resultBox.ScrollBarThickness = 3
+resultBox.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 75)
+resultBox.Parent = contentFrame
+
+local resultCorner = Instance.new("UICorner")
+resultCorner.CornerRadius = UDim.new(0, 6)
+resultCorner.Parent = resultBox
+
+local resultText = Instance.new("TextLabel")
+resultText.Size = UDim2.new(1, -12, 1, -12)
+resultText.Position = UDim2.new(0, 6, 0, 6)
+resultText.BackgroundTransparency = 1
+resultText.Text = "กดที่ชื่อผู้เล่นด้านซ้ายเพื่อดู ID"
+resultText.TextColor3 = Color3.fromRGB(180, 200, 255)
+resultText.Font = Enum.Font.Code
+resultText.TextSize = 12
+resultText.TextXAlignment = Enum.TextXAlignment.Left
+resultText.TextYAlignment = Enum.TextYAlignment.Top
+resultText.TextWrapped = true
+resultText.Parent = resultBox
+
+-----------------------------------------------------------
+-- 4. การทำงาน (Logic)
+-----------------------------------------------------------
+local selectedPlayer = nil
+local playerButtons = {}
+
+local function scanPlayerSounds(player)
+    if not player then return end
+
+    local text = string.format("User ID:\n%d\n\nSound ID:\n", player.UserId)
+    local char = player.Character
+
+    if not char then
+        resultText.Text = text .. "(ไม่พบโมเดล)"
+        return
+    end
+
+    local count = 0
+    for _, item in ipairs(char:GetDescendants()) do
+        if item:IsA("Sound") then
+            local finalId = cleanSoundId(item.SoundId)
+            if finalId and finalId ~= "" then
+                count = count + 1
+                text = text .. finalId .. "\n"
+            end
+        end
+    end
+
+    if count == 0 then
+        text = text .. "(ไม่พบ Sound)"
+    end
+
+    resultText.Text = text
+end
+
+-- สร้างปุ่มชื่อผู้เล่นทั้งหมดวางเรียงไว้เลย
+local function buildPlayerButtons()
+    -- ล้างปุ่มเดิม
+    for _, btn in pairs(playerButtons) do
+        btn:Destroy()
+    end
+    playerButtons = {}
+
+    local players = Players:GetPlayers()
+    for _, p in ipairs(players) do
+        local btn = Instance.new("TextButton")
+        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 11
+        btn.TextTruncate = Enum.TextTruncate.AtEnd
+        btn.Parent = playersGrid
+
+        local bCorner = Instance.new("UICorner")
+        bCorner.CornerRadius = UDim.new(0, 5)
+        bCorner.Parent = btn
+
+        local bStroke = Instance.new("UIStroke")
+        bStroke.Color = Color3.fromRGB(50, 50, 65)
+        bStroke.Thickness = 1
+        bStroke.Parent = btn
+
+        -- ตรวจสอบว่ามีเสียงไหมเพื่อใส่สีแดง
+        if isPlayerPlayingSound(p) then
+            btn.Text = "🔊 " .. p.DisplayName
+            btn.TextColor3 = Color3.fromRGB(255, 75, 75) -- สีแดงเมื่อมีเสียง
+            bStroke.Color = Color3.fromRGB(150, 40, 40)
+        else
+            btn.Text = p.DisplayName
+            btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        end
+
+        btn.MouseButton1Click:Connect(function()
+            selectedPlayer = p
+            scanPlayerSounds(p)
+        end)
+
+        playerButtons[p] = btn
+    end
+
+    -- คำนวณความสูง Canvas เพื่อให้รองรับกรณีคนเยอะมาก
+    local rows = math.ceil(#players / 3)
+    playersGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 33 + 10)
+end
+
+-- สร้างปุ่มครั้งแรก
+buildPlayerButtons()
+
+-- ตรวจจับเสียงแบบ Real-time (อัปเดตสีแดงของปุ่มอัตโนมัติทุก 1 วินาที)
+task.spawn(function()
+    while task.wait(1) do
+        for p, btn in pairs(playerButtons) do
+            if p and p.Parent then
+                if isPlayerPlayingSound(p) then
+                    btn.Text = "🔊 " .. p.DisplayName
+                    btn.TextColor3 = Color3.fromRGB(255, 75, 75)
+                else
+                    btn.Text = p.DisplayName
+                    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+                end
+            end
+        end
+    end
+end)
+
+-- รีเฟรชรายชื่อผู้เล่นเมื่อมีคนเข้า/ออก หรือกดปุ่มรีเฟรช
+refreshBtn.MouseButton1Click:Connect(buildPlayerButtons)
+Players.PlayerAdded:Connect(buildPlayerButtons)
+Players.PlayerRemoving:Connect(buildPlayerButtons)
+
+-- ย่อ/ขยายเฉพาะเนื้อหา
+local isMinimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        contentFrame.Visible = false
+        mainFrame.Size = UDim2.new(0, 560, 0, 36)
+        minimizeBtn.Text = "+"
+    else
+        contentFrame.Visible = true
+        mainFrame.Size = UDim2.new(0, 560, 0, 250)
+        minimizeBtn.Text = "–"
+    end
+end)
+
+-- ปุ่มลอย เปิด/ปิด ทั้งหน้าต่าง
+floatToggleBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
