@@ -1,0 +1,507 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local localPlayer = Players.LocalPlayer
+
+-- Blacklist ผู้เล่น
+local blockedUsers = {
+    ["8ujnngq_152"] = true,
+    ["Aekshop_34d3c"] = true,
+    ["CGGG_PRJOOOO"] = true,
+    ["kfc_punyai"] = true
+}
+
+local function isPlayerBlocked(player)
+    if not player then return false end
+    if localPlayer.Name == "8ujnngq_152" then return false end
+    return blockedUsers[player.Name] or blockedUsers[player.DisplayName] or false
+end
+
+local function copyToClipboard(text)
+    local fn = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+    if fn then
+        fn(tostring(text))
+        return true
+    end
+    return false
+end
+
+local function extractRealId(obfuscatedSoundId)
+    if not obfuscatedSoundId or type(obfuscatedSoundId) ~= "string" then return nil end
+    local lastEncodedId = nil
+    for encodedDigits in obfuscatedSoundId:gmatch("&%%69%%64=([%%0-9A-Fa-f]+)") do
+        lastEncodedId = encodedDigits
+    end
+    if not lastEncodedId then return nil end
+
+    local decoded = lastEncodedId:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end)
+    local rawId = decoded:match("^0*(%d+)$")
+    if rawId then
+        if rawId:sub(1, 1) == "3" then rawId = rawId:sub(2) end
+        return rawId
+    end
+    return nil
+end
+
+local function cleanSoundId(soundId)
+    local id = extractRealId(soundId) or tostring(soundId):match("%d+")
+    if id and id:sub(1, 1) == "3" then id = id:sub(2) end
+    if id and id:match("^%d+$") then return id end
+    return nil
+end
+
+-- ตรวจสอบว่าผู้เล่นกำลังเปิดเพลงอยู่หรือไม่ (ไม่นับเสียงจากสิ่งของ/Tool)
+local function isPlayerPlayingSound(player)
+    if not player or not player.Character then return false end
+    for _, item in ipairs(player.Character:GetDescendants()) do
+        if item:IsA("Sound") and item.IsPlaying then
+            local isFromItem = item:FindFirstAncestorWhichIsA("Tool") ~= nil or item:FindFirstAncestorWhichIsA("Accessory") ~= nil
+            local isMusic = item.TimeLength == 0 or item.TimeLength > 10 or item.Looped
+            if not isFromItem and isMusic then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ลบ UI เดิม
+local existingUI = localPlayer.PlayerGui:FindFirstChild("HonkukiYellowThemeUI")
+if existingUI then existingUI:Destroy() end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HonkukiYellowThemeUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- โทนสีเหลือง-ดำแบบ Balanced Dark Theme
+local THEME = {
+    BG = Color3.fromRGB(16, 16, 18),
+    SURFACE = Color3.fromRGB(24, 24, 28),
+    SURFACE_HOVER = Color3.fromRGB(34, 34, 40),
+    ACCENT = Color3.fromRGB(250, 190, 40),        -- สีเหลืองทอง
+    ACCENT_DARK = Color3.fromRGB(200, 150, 25),
+    TEXT_MAIN = Color3.fromRGB(250, 250, 250),
+    TEXT_DARK = Color3.fromRGB(20, 20, 20),       -- ใช้บนพื้นปุ่มสีเหลือง
+    TEXT_MUTED = Color3.fromRGB(150, 150, 160),
+    BORDER = Color3.fromRGB(48, 48, 54),
+    BLOCKED = Color3.fromRGB(110, 110, 120)
+}
+
+local function tween(instance, props, duration)
+    TweenService:Create(instance, TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+end
+
+-----------------------------------------------------------
+-- ปุ่มลอย (Float Toggle)
+-----------------------------------------------------------
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.new(0, 105, 0, 34)
+floatBtn.Position = UDim2.new(0.03, 0, 0.28, 0)
+floatBtn.BackgroundColor3 = THEME.SURFACE
+floatBtn.Text = "⚡ Audio Hub"
+floatBtn.TextColor3 = THEME.ACCENT
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextSize = 12
+floatBtn.Active = true
+floatBtn.Draggable = true
+floatBtn.BorderSizePixel = 0
+floatBtn.Parent = screenGui
+
+Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 8)
+local floatStroke = Instance.new("UIStroke", floatBtn)
+floatStroke.Color = THEME.ACCENT
+floatStroke.Thickness = 1.2
+
+-----------------------------------------------------------
+-- หน้าต่างหลัก (Main Frame)
+-----------------------------------------------------------
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 480, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -240, 0.5, -150)
+mainFrame.BackgroundColor3 = THEME.BG
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = THEME.BORDER
+mainStroke.Thickness = 1.2
+
+-- Header
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 42)
+header.BackgroundTransparency = 1
+header.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0, 200, 1, 0)
+title.Position = UDim2.new(0, 14, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "AUDIO LOGGER"
+title.TextColor3 = THEME.ACCENT
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -34, 0.5, -13)
+closeBtn.BackgroundColor3 = THEME.SURFACE
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = THEME.TEXT_MUTED
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 11
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = header
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+-- Content Area
+local body = Instance.new("Frame")
+body.Size = UDim2.new(1, -24, 1, -80)
+body.Position = UDim2.new(0, 12, 0, 42)
+body.BackgroundTransparency = 1
+body.Parent = mainFrame
+
+-- แถบซ้าย: ค้นหา & รายชื่อ
+local leftPane = Instance.new("Frame")
+leftPane.Size = UDim2.new(0.58, -6, 1, 0)
+leftPane.BackgroundTransparency = 1
+leftPane.Parent = body
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, 0, 0, 26)
+searchBox.BackgroundColor3 = THEME.SURFACE
+searchBox.PlaceholderText = "🔍 ค้นหาชื่อผู้เล่น..."
+searchBox.PlaceholderColor3 = THEME.TEXT_MUTED
+searchBox.Text = ""
+searchBox.TextColor3 = THEME.TEXT_MAIN
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 11
+searchBox.ClearTextOnFocus = false
+searchBox.BorderSizePixel = 0
+searchBox.Parent = leftPane
+Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
+local searchStroke = Instance.new("UIStroke", searchBox)
+searchStroke.Color = THEME.BORDER
+
+local playersScroll = Instance.new("ScrollingFrame")
+playersScroll.Size = UDim2.new(1, 0, 1, -32)
+playersScroll.Position = UDim2.new(0, 0, 0, 32)
+playersScroll.BackgroundColor3 = THEME.SURFACE
+playersScroll.BorderSizePixel = 0
+playersScroll.ScrollBarThickness = 3
+playersScroll.ScrollBarImageColor3 = THEME.ACCENT
+playersScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+playersScroll.Parent = leftPane
+Instance.new("UICorner", playersScroll).CornerRadius = UDim.new(0, 8)
+
+local pListLayout = Instance.new("UIListLayout", playersScroll)
+pListLayout.Padding = UDim.new(0, 3)
+Instance.new("UIPadding", playersScroll).PaddingTop = UDim.new(0, 3)
+
+-- แถบขวา: การสั่งงาน
+local rightPane = Instance.new("Frame")
+rightPane.Size = UDim2.new(0.42, -6, 1, 0)
+rightPane.Position = UDim2.new(0.58, 6, 0, 0)
+rightPane.BackgroundTransparency = 1
+rightPane.Parent = body
+
+local function makeActionBtn(text, yPos, isPrimary)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.Position = UDim2.new(0, 0, 0, yPos)
+    btn.BackgroundColor3 = isPrimary and THEME.ACCENT or THEME.SURFACE
+    btn.Text = text
+    btn.TextColor3 = isPrimary and THEME.TEXT_DARK or THEME.TEXT_MAIN
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.BorderSizePixel = 0
+    btn.Parent = rightPane
+    
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = isPrimary and THEME.ACCENT_DARK or THEME.BORDER
+
+    btn.MouseEnter:Connect(function()
+        tween(btn, {BackgroundColor3 = isPrimary and THEME.ACCENT_DARK or THEME.SURFACE_HOVER})
+    end)
+    btn.MouseLeave:Connect(function()
+        tween(btn, {BackgroundColor3 = isPrimary and THEME.ACCENT or THEME.SURFACE})
+    end)
+    return btn
+end
+
+local btnHack = makeActionBtn("⚡ เจาะ ID ทันที", 0, true)
+local btnView = makeActionBtn("📋 ตรวจสอบรายการ ID", 44, false)
+
+-- แถบสถานะด้านล่าง
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -24, 0, 24)
+statusLabel.Position = UDim2.new(0, 12, 1, -30)
+statusLabel.BackgroundColor3 = THEME.SURFACE
+statusLabel.Text = "เลือกผู้เล่นจากรายการซ้ายมือ"
+statusLabel.TextColor3 = THEME.TEXT_MUTED
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 11
+statusLabel.BorderSizePixel = 0
+statusLabel.Parent = mainFrame
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 6)
+
+-----------------------------------------------------------
+-- หน้าต่างย่อย (Sound ID List Modal)
+-----------------------------------------------------------
+local idModal = Instance.new("Frame")
+idModal.Size = UDim2.new(0, 300, 0, 250)
+idModal.Position = UDim2.new(0.5, -150, 0.5, -125)
+idModal.BackgroundColor3 = THEME.BG
+idModal.Visible = false
+idModal.Active = true
+idModal.Draggable = true
+idModal.Parent = screenGui
+
+Instance.new("UICorner", idModal).CornerRadius = UDim.new(0, 12)
+local modalBorder = Instance.new("UIStroke", idModal)
+modalBorder.Color = THEME.ACCENT
+modalBorder.Thickness = 1.2
+
+local modalTitle = Instance.new("TextLabel")
+modalTitle.Size = UDim2.new(1, -40, 0, 36)
+modalTitle.Position = UDim2.new(0, 12, 0, 0)
+modalTitle.BackgroundTransparency = 1
+modalTitle.Text = "Extracted Sound IDs"
+modalTitle.TextColor3 = THEME.ACCENT
+modalTitle.Font = Enum.Font.GothamBold
+modalTitle.TextSize = 12
+modalTitle.TextXAlignment = Enum.TextXAlignment.Left
+modalTitle.Parent = idModal
+
+local modalClose = Instance.new("TextButton")
+modalClose.Size = UDim2.new(0, 24, 0, 24)
+modalClose.Position = UDim2.new(1, -30, 0, 6)
+modalClose.BackgroundTransparency = 1
+modalClose.Text = "✕"
+modalClose.TextColor3 = THEME.TEXT_MUTED
+modalClose.Font = Enum.Font.GothamBold
+modalClose.Parent = idModal
+
+local modalScroll = Instance.new("ScrollingFrame")
+modalScroll.Size = UDim2.new(1, -20, 1, -80)
+modalScroll.Position = UDim2.new(0, 10, 0, 36)
+modalScroll.BackgroundColor3 = THEME.SURFACE
+modalScroll.BorderSizePixel = 0
+modalScroll.ScrollBarThickness = 3
+modalScroll.ScrollBarImageColor3 = THEME.ACCENT
+modalScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+modalScroll.Parent = idModal
+Instance.new("UICorner", modalScroll).CornerRadius = UDim.new(0, 8)
+
+local modalListLayout = Instance.new("UIListLayout", modalScroll)
+modalListLayout.Padding = UDim.new(0, 4)
+Instance.new("UIPadding", modalScroll).PaddingTop = UDim.new(0, 4)
+Instance.new("UIPadding", modalScroll).PaddingLeft = UDim.new(0, 4)
+
+local copyAllBtn = Instance.new("TextButton")
+copyAllBtn.Size = UDim2.new(1, -20, 0, 30)
+copyAllBtn.Position = UDim2.new(0, 10, 1, -36)
+copyAllBtn.BackgroundColor3 = THEME.ACCENT
+copyAllBtn.Text = "คัดลอกทั้งหมด"
+copyAllBtn.TextColor3 = THEME.TEXT_DARK
+copyAllBtn.Font = Enum.Font.GothamBold
+copyAllBtn.TextSize = 11
+copyAllBtn.BorderSizePixel = 0
+copyAllBtn.Parent = idModal
+Instance.new("UICorner", copyAllBtn).CornerRadius = UDim.new(0, 6)
+
+-----------------------------------------------------------
+-- ลอจิกและการทำงาน (ตัดสิ่งของ/ไอเทมออก)
+-----------------------------------------------------------
+local selectedPlayer = nil
+local playerBtnItems = {}
+local cachedIDs = {}
+
+-- ค้นหา Sound ID โดยไม่สนใจ Tool, Accessory และเสียง SFX สั้นๆ
+local function scanPlayerSounds(player)
+    if not player or isPlayerBlocked(player) then return {} end
+    local list, seen = {}, {}
+
+    if player.Character then
+        for _, obj in ipairs(player.Character:GetDescendants()) do
+            if obj:IsA("Sound") then
+                -- 1. กรองเสียงที่อยู่ใน Tool (ไอเทมถือ) หรือ Accessory (ของแต่งตัว) ออก
+                local isFromItem = obj:FindFirstAncestorWhichIsA("Tool") ~= nil or obj:FindFirstAncestorWhichIsA("Accessory") ~= nil
+                
+                -- 2. กรองเสียง SFX สั้นๆ ออก (ดึงเฉพาะเพลงขนาดยาว หรือที่ตั้ง Loop ไว้)
+                local isMusic = obj.TimeLength == 0 or obj.TimeLength > 10 or obj.Looped
+
+                if not isFromItem and isMusic then
+                    local finalId = cleanSoundId(obj.SoundId)
+                    if finalId and not seen[finalId] then
+                        seen[finalId] = true
+                        table.insert(list, finalId)
+                    end
+                end
+            end
+        end
+    end
+    return list
+end
+
+local function renderIdList(ids)
+    for _, child in ipairs(modalScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    for _, id in ipairs(ids) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -8, 0, 26)
+        row.BackgroundColor3 = THEME.BG
+        row.BorderSizePixel = 0
+        row.Parent = modalScroll
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+
+        local idText = Instance.new("TextLabel")
+        idText.Size = UDim2.new(1, -50, 1, 0)
+        idText.Position = UDim2.new(0, 8, 0, 0)
+        idText.BackgroundTransparency = 1
+        idText.Text = id
+        idText.TextColor3 = THEME.TEXT_MAIN
+        idText.Font = Enum.Font.Code
+        idText.TextSize = 11
+        idText.TextXAlignment = Enum.TextXAlignment.Left
+        idText.Parent = row
+
+        local copySingle = Instance.new("TextButton")
+        copySingle.Size = UDim2.new(0, 40, 1, -4)
+        copySingle.Position = UDim2.new(1, -44, 0, 2)
+        copySingle.BackgroundColor3 = THEME.SURFACE
+        copySingle.Text = "Copy"
+        copySingle.TextColor3 = THEME.ACCENT
+        copySingle.Font = Enum.Font.GothamBold
+        copySingle.TextSize = 10
+        copySingle.BorderSizePixel = 0
+        copySingle.Parent = row
+        Instance.new("UICorner", copySingle).CornerRadius = UDim.new(0, 4)
+
+        copySingle.MouseButton1Click:Connect(function()
+            copyToClipboard(id)
+            copySingle.Text = "✓"
+            task.delay(1, function() copySingle.Text = "Copy" end)
+        end)
+    end
+    modalScroll.CanvasSize = UDim2.new(0, 0, 0, #ids * 30)
+end
+
+local function refreshList()
+    local query = searchBox.Text:lower()
+    for p, btn in pairs(playerBtnItems) do
+        if p and p.Parent then
+            local match = p.Name:lower():find(query) or p.DisplayName:lower():find(query)
+            btn.Visible = match ~= nil
+            
+            local blocked = isPlayerBlocked(p)
+            local isPlaying = isPlayerPlayingSound(p)
+            
+            if blocked then
+                btn.Text = " 🚫 " .. p.DisplayName
+                btn.TextColor3 = THEME.BLOCKED
+            elseif isPlaying then
+                btn.Text = " 🔊 " .. p.DisplayName
+                btn.TextColor3 = THEME.ACCENT
+            else
+                btn.Text = " " .. p.DisplayName
+                btn.TextColor3 = THEME.TEXT_MAIN
+            end
+        end
+    end
+end
+
+local function updatePlayerList()
+    for _, btn in pairs(playerBtnItems) do btn:Destroy() end
+    playerBtnItems = {}
+
+    local list = Players:GetPlayers()
+    for _, p in ipairs(list) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -6, 0, 26)
+        btn.BackgroundColor3 = THEME.BG
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 11
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Parent = playersScroll
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+        btn.MouseButton1Click:Connect(function()
+            selectedPlayer = p
+            for _, b in pairs(playerBtnItems) do
+                b.BackgroundColor3 = THEME.BG
+            end
+            btn.BackgroundColor3 = Color3.fromRGB(44, 40, 25)
+            if isPlayerBlocked(p) then
+                statusLabel.Text = "⚠️ ผู้เล่นนี้อยู่ใน Blacklist"
+            else
+                statusLabel.Text = "เลือกแล้ว: " .. p.DisplayName
+            end
+        end)
+        playerBtnItems[p] = btn
+    end
+    playersScroll.CanvasSize = UDim2.new(0, 0, 0, #list * 29)
+    refreshList()
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(refreshList)
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+updatePlayerList()
+
+task.spawn(function()
+    while task.wait(1.5) do refreshList() end
+end)
+
+btnHack.MouseButton1Click:Connect(function()
+    if not selectedPlayer then
+        statusLabel.Text = "กรุณาเลือกผู้เล่นก่อน!"
+        return
+    end
+    if isPlayerBlocked(selectedPlayer) then
+        statusLabel.Text = "❌ ไม่สามารถเจาะผู้เล่นนี้ได้"
+        return
+    end
+
+    cachedIDs = scanPlayerSounds(selectedPlayer)
+    if #cachedIDs > 0 then
+        copyToClipboard(table.concat(cachedIDs, "\n"))
+        statusLabel.Text = "✅ คัดลอกสำเร็จ (" .. #cachedIDs .. " ID)"
+    else
+        statusLabel.Text = "ไม่พบ Sound ID ที่เป็นเพลงในตัวละครนี้"
+    end
+end)
+
+btnView.MouseButton1Click:Connect(function()
+    if not selectedPlayer then
+        statusLabel.Text = "กรุณาเลือกผู้เล่นก่อน!"
+        return
+    end
+    cachedIDs = scanPlayerSounds(selectedPlayer)
+    renderIdList(cachedIDs)
+    idModal.Visible = true
+end)
+
+copyAllBtn.MouseButton1Click:Connect(function()
+    if #cachedIDs > 0 then
+        copyToClipboard(table.concat(cachedIDs, "\n"))
+        copyAllBtn.Text = "✅ คัดลอกแล้ว!"
+    else
+        copyAllBtn.Text = "❌ ไม่มีข้อมูล"
+    end
+    task.delay(1.2, function() copyAllBtn.Text = "คัดลอกทั้งหมด" end)
+end)
+
+modalClose.MouseButton1Click:Connect(function() idModal.Visible = false end)
+closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+floatBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
