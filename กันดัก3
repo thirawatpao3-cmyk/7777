@@ -1,0 +1,378 @@
+-- ใส่โค้ดนี้ใน LocalScript (เช่น StarterPlayerScripts หรือ StarterGui)
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local playerToolEvent = ReplicatedStorage:WaitForChild("RE"):WaitForChild("PlayerToolEvent")
+
+-- ==============================================================================
+-- 🛡️ ANTI-STEAL MUSIC LOGIC
+-- ==============================================================================
+
+local REAL_ROBLOX_AUDIO_POOL = {
+    "1848354536", "1837879082", "9043887091", "1845756489", "9048375035",
+    "1836842899", "1843404009", "7029024726", "5410086218", "1846458016",
+    "1839841807", "1841647093", "9046863253", "9047050075", "1837474337",
+    "1842802203", "1845554017", "1838673350", "9045766377", "1840684529",
+    "1836009206", "1847853099", "9039767824", "9042666762", "1835337424",
+    "1841998846", "1839246711", "9044565954", "1846088038", "1837070127",
+    "1843324953", "9041985263", "1838457617", "1845092181", "9038554128",
+    "1836358814", "1842241530", "1847319562", "9045120934", "1839981240",
+    "1841093482", "1837762915", "9040881726", "1844219085", "1835891042",
+    "1846892310", "9043118902", "1838129045", "1842910482", "9039112048",
+    "1836712094", "1845310928", "1839510294", "9046102938", "1840291847",
+    "1837310928", "1843819204", "9041502938", "1838910294", "1846201928",
+    "1835610294", "1841402918", "9044901284", "1839019284", "1844710294",
+    "1836491029", "1842501928", "9040291847", "1837910294", "1845810294",
+    "1838301928", "1843102948", "9042109284", "1839601928", "1846601928",
+    "1835901928", "1841701928", "9045401928", "1837501928", "1844401928",
+    "1836901928", "1842701928", "9039501928", "1838701928", "1845901928",
+    "1836101928", "1843601928", "9043501928", "1839301928", "1846901928",
+    "1835401928", "1841201928", "9041201928", "1837101928", "1844901928",
+    "1836601928", "1842301928", "9046501928", "1838501928", "129138368026497"
+}
+
+local HEX = "0123456789ABCDEF"
+local ZWS  = string.char(226, 128, 139)
+local ZWNJ = string.char(226, 128, 140)
+local ZWJ  = string.char(226, 128, 141)
+local WJ   = string.char(226, 129, 160)
+local BOM  = string.char(239, 187, 191)
+
+local function toHexByte(b)
+    local hi = math.floor(b / 16) + 1
+    local lo = (b % 16) + 1
+    return "%" .. string.sub(HEX, hi, hi) .. string.sub(HEX, lo, lo)
+end
+
+local function encodeMixedHex(idStr)
+    local s = tostring(idStr)
+    local len = #s
+    local rawPos1 = (len >= 3) and math.random(1, math.floor(len / 2)) or 2
+    local rawPos2 = (len >= 5) and math.random(math.floor(len / 2) + 1, len) or 5
+    local out = {}
+    for i = 1, len do
+        local ch = string.sub(s, i, i)
+        if i == rawPos1 or i == rawPos2 then
+            table.insert(out, ch)
+        else
+            table.insert(out, toHexByte(string.byte(ch, 1)))
+        end
+    end
+    return table.concat(out)
+end
+
+local function pickRandomRealBait(excludeId)
+    for _ = 1, 12 do
+        local pick = REAL_ROBLOX_AUDIO_POOL[math.random(1, #REAL_ROBLOX_AUDIO_POOL)]
+        if pick ~= tostring(excludeId) then
+            return pick
+        end
+    end
+    return "1848354536"
+end
+
+local function randomGarbageNumber()
+    local mode = math.random(1, 4)
+    if mode == 1 then
+        return tostring(math.random(100000000, 999999999))
+    elseif mode == 2 then
+        return tostring(math.random(1000000000, 2147483647))
+    elseif mode == 3 then
+        return tostring(math.random(111111111, 888888888))
+    else
+        return tostring(math.random(10000000, 99999999))
+    end
+end
+
+local function buildProtectedPayload(realSongId)
+    local bait1 = pickRandomRealBait(realSongId)
+    local bait2 = pickRandomRealBait(realSongId)
+    local encodedReal = encodeMixedHex(realSongId)
+    
+    local junkHeader = "&%69%64=" .. bait1 .. "&id=" .. randomGarbageNumber() .. "\n"
+    local invisibleBlock = string.rep(ZWS .. ZWNJ .. ZWJ .. WJ .. BOM, 12)
+    local decoys = "&\n=X8K%DE%A1\n&%69%64=" .. bait2 .. "\n"
+    local tail = "\n&%00&%00%E2%80%AE&%69%64=" .. randomGarbageNumber() .. "&%26&%3D"
+    
+    return junkHeader .. invisibleBlock .. decoys .. encodedReal .. tail
+end
+
+-- ==============================================================================
+-- 🎵 ตัวแปรสถานะและการส่งอีเวนต์
+-- ==============================================================================
+
+local DEFAULT_SONG_ID = "98343405562412"
+local isScriptEnabled = true
+local isPlaying = false
+local waveTweens = {}
+
+local function sendMusicEvent(songId, active)
+    if not isScriptEnabled and active then return end
+    
+    local payload = ""
+    if active and songId and songId ~= "" then
+        payload = buildProtectedPayload(songId)
+    end
+    
+    local args = {
+        "ToolMusicText",
+        payload,
+        [4] = active
+    }
+    playerToolEvent:FireServer(unpack(args))
+end
+
+-- ==============================================================================
+-- 🖥️ ส่วนติดต่อผู้ใช้ (Modern UI)
+-- ==============================================================================
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ModernMusicUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 310, 0, 240)
+mainFrame.Position = UDim2.new(0.5, -155, 0.5, -120)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 20, 32)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 18)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(55, 50, 75)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
+
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1, -28, 0, 26)
+header.Position = UDim2.new(0, 14, 0, 14)
+header.BackgroundTransparency = 1
+header.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎵 MUSIC PLAYER"
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = header
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleSwitch"
+toggleBtn.Size = UDim2.new(0, 46, 0, 22)
+toggleBtn.Position = UDim2.new(1, -46, 0.5, -11)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(46, 213, 115)
+toggleBtn.Text = ""
+toggleBtn.AutoButtonColor = false
+toggleBtn.Parent = header
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
+
+local toggleCircle = Instance.new("Frame")
+toggleCircle.Name = "Circle"
+toggleCircle.Size = UDim2.new(0, 16, 0, 16)
+toggleCircle.Position = UDim2.new(1, -19, 0.5, -8)
+toggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+toggleCircle.BorderSizePixel = 0
+toggleCircle.Parent = toggleBtn
+
+local circleCorner = Instance.new("UICorner")
+circleCorner.CornerRadius = UDim.new(1, 0)
+circleCorner.Parent = toggleCircle
+
+local waveFrame = Instance.new("Frame")
+waveFrame.Name = "WaveFrame"
+waveFrame.Size = UDim2.new(0, 140, 0, 28)
+waveFrame.Position = UDim2.new(0.5, -70, 0, 46)
+waveFrame.BackgroundTransparency = 1
+waveFrame.Parent = mainFrame
+
+local waveLayout = Instance.new("UIListLayout")
+waveLayout.FillDirection = Enum.FillDirection.Horizontal
+waveLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+waveLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+waveLayout.Padding = UDim.new(0, 4)
+waveLayout.Parent = waveFrame
+
+local waveBars = {}
+for i = 1, 7 do
+    local bar = Instance.new("Frame")
+    bar.Name = "Bar" .. i
+    bar.Size = UDim2.new(0, 6, 0, 6)
+    bar.BackgroundColor3 = Color3.fromRGB(75, 70, 95)
+    bar.BorderSizePixel = 0
+    bar.Parent = waveFrame
+
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(1, 0)
+    barCorner.Parent = bar
+
+    table.insert(waveBars, bar)
+end
+
+local inputFrame = Instance.new("Frame")
+inputFrame.Name = "InputFrame"
+inputFrame.Size = UDim2.new(1, -28, 0, 40)
+inputFrame.Position = UDim2.new(0, 14, 0, 84)
+inputFrame.BackgroundColor3 = Color3.fromRGB(32, 29, 45)
+inputFrame.BorderSizePixel = 0
+inputFrame.Parent = mainFrame
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0, 10)
+inputCorner.Parent = inputFrame
+
+local inputStroke = Instance.new("UIStroke")
+inputStroke.Color = Color3.fromRGB(50, 45, 70)
+inputStroke.Thickness = 1
+inputStroke.Parent = inputFrame
+
+local idInput = Instance.new("TextBox")
+idInput.Name = "IdInput"
+idInput.Size = UDim2.new(1, -20, 1, 0)
+idInput.Position = UDim2.new(0, 10, 0, 0)
+idInput.BackgroundTransparency = 1
+idInput.Text = DEFAULT_SONG_ID
+idInput.PlaceholderText = "ใส่ ID เพลงตรงนี้..."
+idInput.PlaceholderColor3 = Color3.fromRGB(110, 105, 130)
+idInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+idInput.TextSize = 13
+idInput.Font = Enum.Font.Gotham
+idInput.ClearTextOnFocus = true
+idInput.Parent = inputFrame
+
+local actionBtn = Instance.new("TextButton")
+actionBtn.Name = "ActionButton"
+actionBtn.Size = UDim2.new(1, -28, 0, 42)
+actionBtn.Position = UDim2.new(0, 14, 0, 136)
+actionBtn.BackgroundColor3 = Color3.fromRGB(255, 117, 140)
+actionBtn.Text = "เปิดเพลง"
+actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+actionBtn.TextSize = 14
+actionBtn.Font = Enum.Font.GothamBold
+actionBtn.Parent = mainFrame
+
+local actionCorner = Instance.new("UICorner")
+actionCorner.CornerRadius = UDim.new(0, 12)
+actionCorner.Parent = actionBtn
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -28, 0, 20)
+statusLabel.Position = UDim2.new(0, 14, 0, 192)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "สถานะ: พร้อมใช้งาน (ID: " .. DEFAULT_SONG_ID .. ")"
+statusLabel.TextColor3 = Color3.fromRGB(130, 125, 150)
+statusLabel.TextSize = 12
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+statusLabel.Parent = mainFrame
+
+-- ==============================================================================
+-- ⚙️ การควบคุม UI และแอนิเมชัน
+-- ==============================================================================
+
+local function startWaveAnimation()
+    local heights = {18, 26, 14, 28, 20, 24, 12}
+    for i, bar in ipairs(waveBars) do
+        bar.BackgroundColor3 = Color3.fromRGB(255, 117, 140)
+        local tweenInfo = TweenInfo.new(0.35 + (i * 0.05), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+        local tween = TweenService:Create(bar, tweenInfo, {Size = UDim2.new(0, 6, 0, heights[i] or 18)})
+        tween:Play()
+        table.insert(waveTweens, tween)
+    end
+end
+
+local function stopWaveAnimation()
+    for _, tween in ipairs(waveTweens) do
+        tween:Cancel()
+    end
+    table.clear(waveTweens)
+    for _, bar in ipairs(waveBars) do
+        bar.BackgroundColor3 = Color3.fromRGB(75, 70, 95)
+        TweenService:Create(bar, TweenInfo.new(0.2), {Size = UDim2.new(0, 6, 0, 6)}):Play()
+    end
+end
+
+local function resetPlayer()
+    isPlaying = false
+    actionBtn.Text = "เปิดเพลง"
+    actionBtn.BackgroundColor3 = Color3.fromRGB(255, 117, 140)
+    stopWaveAnimation()
+    sendMusicEvent("", false)
+end
+
+toggleBtn.MouseButton1Click:Connect(function()
+    isScriptEnabled = not isScriptEnabled
+    
+    local targetCirclePos = isScriptEnabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    local targetBgColor = isScriptEnabled and Color3.fromRGB(46, 213, 115) or Color3.fromRGB(75, 70, 90)
+    
+    TweenService:Create(toggleCircle, TweenInfo.new(0.2), {Position = targetCirclePos}):Play()
+    TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetBgColor}):Play()
+    
+    if isScriptEnabled then
+        statusLabel.Text = "สถานะ: เปิดใช้งานสคริปต์แล้ว"
+        statusLabel.TextColor3 = Color3.fromRGB(46, 213, 115)
+    else
+        resetPlayer()
+        statusLabel.Text = "สถานะ: ปิดการทำงานสคริปต์"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 71, 87)
+    end
+end)
+
+actionBtn.MouseButton1Click:Connect(function()
+    if not isScriptEnabled then
+        statusLabel.Text = "กรุณาเปิดสวิตช์สคริปต์ก่อนใช้งาน"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 71, 87)
+        return
+    end
+
+    if not isisPlaying then
+        local rawText = idInput.Text
+        local songId = rawText:match("%d+")
+        if songId and songId ~= "" then
+            isPlaying = true
+            actionBtn.Text = "ปิดเพลง"
+            actionBtn.BackgroundColor3 = Color3.fromRGB(235, 77, 75)
+            statusLabel.Text = "กำลังเล่น: ID " .. songId
+            statusLabel.TextColor3 = Color3.fromRGB(46, 213, 115)
+            
+            startWaveAnimation()
+            sendMusicEvent(songId, true)
+        else
+            statusLabel.Text = "กรุณาใส่ ID ให้ถูกต้อง"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 71, 87)
+        end
+    else
+        resetPlayer()
+        statusLabel.Text = "สถานะ: ปิดเพลงแล้ว"
+        statusLabel.TextColor3 = Color3.fromRGB(130, 125, 150)
+    end
+end)
+
+-- ==============================================================================
+-- 📡 เรียกใช้อีเวนต์เริ่มต้น
+-- ==============================================================================
+
+local initialArgs = {
+    "ToolMusicText",
+    "",
+    [4] = true
+}
+playerToolEvent:FireServer(unpack(initialArgs))
